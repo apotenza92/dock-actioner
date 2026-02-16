@@ -223,18 +223,50 @@ jobs:
 
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$UPLOAD_ZIP"
 
+          SUBMIT_JSON=""
+
           if [[ "$MODE" == "api_key" ]]; then
-            xcrun notarytool submit "$UPLOAD_ZIP" \
+            SUBMIT_JSON="$(xcrun notarytool submit "$UPLOAD_ZIP" \
               --key "$KEY_PATH" \
               --key-id "$APPLE_NOTARYTOOL_KEY_ID" \
               --issuer "$APPLE_NOTARYTOOL_ISSUER_ID" \
-              --wait
+              --wait \
+              --output-format json)"
           else
-            xcrun notarytool submit "$UPLOAD_ZIP" \
+            SUBMIT_JSON="$(xcrun notarytool submit "$UPLOAD_ZIP" \
               --apple-id "$APPLE_ID" \
               --team-id "$APPLE_TEAM_ID" \
               --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-              --wait
+              --wait \
+              --output-format json)"
+          fi
+
+          echo "$SUBMIT_JSON"
+
+          SUBMISSION_ID="$(python3 -c 'import json,sys; data=json.loads(sys.argv[1]); print(data.get("id", ""))' "$SUBMIT_JSON")"
+          SUBMISSION_STATUS="$(python3 -c 'import json,sys; data=json.loads(sys.argv[1]); print(data.get("status", ""))' "$SUBMIT_JSON")"
+
+          if [[ -z "$SUBMISSION_ID" ]]; then
+            echo "::error::Failed to parse notary submission ID"
+            exit 1
+          fi
+
+          if [[ "$SUBMISSION_STATUS" != "Accepted" ]]; then
+            echo "::error::Notary submission status is '$SUBMISSION_STATUS' (expected 'Accepted')."
+            if [[ "$MODE" == "api_key" ]]; then
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --key "$KEY_PATH" \
+                --key-id "$APPLE_NOTARYTOOL_KEY_ID" \
+                --issuer "$APPLE_NOTARYTOOL_ISSUER_ID" \
+                --output-format json || true
+            else
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --team-id "$APPLE_TEAM_ID" \
+                --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+                --output-format json || true
+            fi
+            exit 1
           fi
 
           xcrun stapler staple -v "$APP_PATH"
