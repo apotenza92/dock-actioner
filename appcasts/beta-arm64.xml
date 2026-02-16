@@ -5,20 +5,21 @@
     <description>DockActioner update feed (beta channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.0.2</title>
-      <link>https://github.com/apotenza92/dock-actioner/releases/tag/v0.0.2</link>
-      <sparkle:version>290000</sparkle:version>
-      <sparkle:shortVersionString>0.0.2</sparkle:shortVersionString>
+      <title>Version 0.0.3</title>
+      <link>https://github.com/apotenza92/dock-actioner/releases/tag/v0.0.3</link>
+      <sparkle:version>390000</sparkle:version>
+      <sparkle:shortVersionString>0.0.3</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/dock-actioner/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Added full per-modifier action mapping with a table-style settings UI and new Single App Mode action.
-- Fixed Preferences opening from the status menu and simplified menu actions to Preferences + Quit.
-- Refined app and status-bar iconography, including a separate beta app icon set and larger menu bar glyph.
-- Added side-by-side beta distribution support (`DockActioner Beta.app`) across CI, release packaging, and Homebrew casks.]]></description>
-      <pubDate>Mon, 16 Feb 2026 08:54:37 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/dock-actioner/releases/download/v0.0.2/DockActioner-Beta-v0.0.2-macos-arm64.zip"
-                 sparkle:edSignature="uCPoVfIX93/cnCMJ3OREOBGkrgbVOs9poogoRB65/GYnpdwVYBtB9LGQjA5ftrRyXWUGQfGTDCe12chBmVtYAg=="
-                 length="1669841"
+      <description sparkle:format="plain-text"><![CDATA[- Added native Sparkle updater integration with an in-app "Check for Updates" flow and configurable update check frequency in Settings.
+- Added signed Sparkle appcasts for stable/beta and arm64/x64, with release automation that regenerates and publishes appcasts from GitHub releases.
+- Unified release notes to a single `CHANGELOG.md` source used by both GitHub Releases and Sparkle update descriptions.
+- Improved first-run permission prompting for Accessibility and Input Monitoring and refreshed the compact settings layout with a table-based mapping editor.
+- Added a no-op (`-`) action option, updated modifier defaults (`Shift+Click` -> Bring All to Front), and a "Reset mappings to defaults" control.]]></description>
+      <pubDate>Mon, 16 Feb 2026 13:06:15 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/dock-actioner/releases/download/v0.0.3/DockActioner-Beta-v0.0.3-macos-arm64.zip"
+                 sparkle:edSignature="MZixdLaUk6phz9YFrAqmUD8B9x/Ydjy6S7OSHIJ93i1iO/haixSOqmwkPcq3a4Kj/PfKG4r3hLhocPTbHRzpCQ=="
+                 length="2635699"
                  type="application/octet-stream" />
     </item>
   </channel>
