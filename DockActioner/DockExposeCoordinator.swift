@@ -862,6 +862,8 @@ final class DockExposeCoordinator: ObservableObject {
         Logger.log("WORKFLOW: Executing click action (button \(buttonNumber)): \(action.rawValue) for \(clickedBundle) (modifiers=\(modifierCombination(from: flags).rawValue), flags=\(flags.rawValue))")
 
         switch action {
+        case .none:
+            return false
         case .hideApp:
             if WindowManager.isAppHidden(bundleIdentifier: clickedBundle) {
                 _ = WindowManager.unhideApp(bundleIdentifier: clickedBundle)
@@ -967,6 +969,8 @@ final class DockExposeCoordinator: ObservableObject {
         Logger.log("WORKFLOW: Executing scroll \(direction == .up ? "up" : "down") action: \(action.rawValue) for \(clickedBundle) (modifiers=\(modifierCombination(from: flags).rawValue), flags=\(flags.rawValue))")
 
         switch action {
+        case .none:
+            return false
         case .hideApp:
             if WindowManager.isAppHidden(bundleIdentifier: clickedBundle) {
                 _ = WindowManager.unhideApp(bundleIdentifier: clickedBundle)

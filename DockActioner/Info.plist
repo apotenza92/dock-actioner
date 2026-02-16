@@ -22,5 +22,15 @@
 	<true/>
 	<key>NSAccessibilityUsageDescription</key>
 	<string>DockActioner needs Accessibility access to detect Dock gestures and manage app windows.</string>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/apotenza92/dock-actioner/main/appcasts/stable-arm64.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>zM3fwyZrb6uCBvOIv8Smh91DRMyrKVQPbWBGpkCcgDI=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<false/>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
 </dict>
 </plist>

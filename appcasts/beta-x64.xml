@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>DockActioner Beta Updates</title>
+    <description>DockActioner update feed (beta channel)</description>
+    <language>en</language>
+    <item>
+      <title>Version 0.0.2</title>
+      <link>https://github.com/apotenza92/dock-actioner/releases/tag/v0.0.2</link>
+      <sparkle:version>290000</sparkle:version>
+      <sparkle:shortVersionString>0.0.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/dock-actioner/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
+      <description sparkle:format="plain-text"><![CDATA[- Added full per-modifier action mapping with a table-style settings UI and new Single App Mode action.
+- Fixed Preferences opening from the status menu and simplified menu actions to Preferences + Quit.
+- Refined app and status-bar iconography, including a separate beta app icon set and larger menu bar glyph.
+- Added side-by-side beta distribution support (`DockActioner Beta.app`) across CI, release packaging, and Homebrew casks.]]></description>
+      <pubDate>Mon, 16 Feb 2026 08:54:37 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/dock-actioner/releases/download/v0.0.2/DockActioner-Beta-v0.0.2-macos-x64.zip"
+                 sparkle:edSignature="eMjT0/LXKHmrk8aODdRPhbiBd7t+KYPh3U7iCVKQu0aZEXQZOQ8cU5jC5NXp6E08JVMtetGjFjRWRTS0whabCg=="
+                 length="1680377"
+                 type="application/octet-stream" />
+    </item>
+  </channel>
+</rss>

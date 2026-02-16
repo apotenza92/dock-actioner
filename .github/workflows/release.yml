@@ -59,7 +59,7 @@ jobs:
             exit 1
           fi
 
-          BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
+          BUILD_NUMBER="$(python3 -c 'import re,sys; tag=sys.argv[1]; m=re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?", tag); assert m; major,minor,patch=int(m.group(1)),int(m.group(2)),int(m.group(3)); prerelease=m.group(4); core=(major*1_000_000)+(minor*1_000)+patch; beta_match=(re.search(r"(?:beta|b)[.-]?(\d+)$", prerelease, flags=re.IGNORECASE) if prerelease else None); stage=(90_000 if prerelease is None else (min(max(int(beta_match.group(1)),1),89_999) if beta_match else 50_000)); print((core*100_000)+stage)' "$TAG")"
 
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -298,6 +298,48 @@ jobs:
           else
             gh release create "$TAG" dist/* --title "$TAG" --notes-file "$NOTES_FILE" --repo "$GH_REPO"
           fi
+
+  update-sparkle-appcasts:
+    needs:
+      - prepare
+      - publish-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Update Sparkle appcast files
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet cryptography
+          python3 scripts/release/update_sparkle_appcasts.py \
+            --repo "${{ github.repository }}" \
+            --output-dir appcasts \
+            --github-token "$GITHUB_TOKEN" \
+            --require-signatures
+
+      - name: Commit and push appcast updates
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if git diff --quiet -- appcasts; then
+            echo "No Sparkle appcast changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add appcasts/*.xml
+          git commit -m "chore: update Sparkle appcasts for ${TAG}"
+          git push origin HEAD:main
 
   update-homebrew-tap:
     needs:

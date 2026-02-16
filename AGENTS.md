@@ -44,6 +44,7 @@ swift tools/generate_icons.swift
 - `APPLE_NOTARYTOOL_KEY_ID`
 - `APPLE_NOTARYTOOL_ISSUER_ID`
 - `APPLE_NOTARYTOOL_KEY_P8_BASE64`
+- `SPARKLE_PRIVATE_ED_KEY`
 - `HOMEBREW_TAP_TOKEN`
 
 ## UI/Product Constraints

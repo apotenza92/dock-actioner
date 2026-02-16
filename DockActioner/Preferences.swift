@@ -3,6 +3,7 @@ import Combine
 import ServiceManagement
 
 enum DockAction: String, CaseIterable, Codable {
+    case none = "none"
     case hideApp = "hideApp"
     case appExpose = "appExpose"
     case minimizeAll = "minimizeAll"
@@ -13,6 +14,7 @@ enum DockAction: String, CaseIterable, Codable {
 
     var displayName: String {
         switch self {
+        case .none: return "-"
         case .hideApp: return "Hide App"
         case .appExpose: return "App Exposé"
         case .minimizeAll: return "Minimize All"
@@ -20,6 +22,54 @@ enum DockAction: String, CaseIterable, Codable {
         case .bringAllToFront: return "Bring All to Front"
         case .hideOthers: return "Hide Others"
         case .singleAppMode: return "Single App Mode"
+        }
+    }
+}
+
+enum UpdateCheckFrequency: String, CaseIterable, Codable, Identifiable {
+    case never
+    case startup
+    case hourly
+    case sixHours
+    case twelveHours
+    case daily
+    case weekly
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .never:
+            return "Never"
+        case .startup:
+            return "On Startup"
+        case .hourly:
+            return "Every Hour"
+        case .sixHours:
+            return "Every 6 Hours"
+        case .twelveHours:
+            return "Every 12 Hours"
+        case .daily:
+            return "Daily"
+        case .weekly:
+            return "Weekly"
+        }
+    }
+
+    var interval: TimeInterval? {
+        switch self {
+        case .hourly:
+            return 60 * 60
+        case .sixHours:
+            return 6 * 60 * 60
+        case .twelveHours:
+            return 12 * 60 * 60
+        case .daily:
+            return 24 * 60 * 60
+        case .weekly:
+            return 7 * 24 * 60 * 60
+        case .never, .startup:
+            return nil
         }
     }
 }
@@ -47,6 +97,8 @@ final class Preferences: ObservableObject {
     private let showOnStartupKey = "showOnStartup"
     private let firstLaunchCompletedKey = "firstLaunchCompleted"
     private let startAtLoginKey = "startAtLogin"
+    private let updateCheckFrequencyKey = "updateCheckFrequency"
+    private let lastUpdateCheckTimestampKey = "lastUpdateCheckTimestamp"
 
     // Prevent feedback loop when we adjust login item after a failed toggle.
     private var applyingLoginItemChange = false
@@ -157,6 +209,12 @@ final class Preferences: ObservableObject {
         }
     }
 
+    @Published var updateCheckFrequency: UpdateCheckFrequency {
+        didSet {
+            userDefaults.set(updateCheckFrequency.rawValue, forKey: updateCheckFrequencyKey)
+        }
+    }
+
     private init() {
         // Load base mappings from UserDefaults or use defaults.
         var clickAction: DockAction
@@ -223,49 +281,49 @@ final class Preferences: ObservableObject {
         }
 
         // Extended modifier mappings.
-        var shiftClickAction = Self.loadAction(from: userDefaults, forKey: shiftClickActionKey) ?? Self.legacyShiftAction(for: clickAction)
+        var shiftClickAction = Self.loadAction(from: userDefaults, forKey: shiftClickActionKey) ?? .bringAllToFront
         var optionClickAction = Self.loadAction(from: userDefaults, forKey: optionClickActionKey) ?? .singleAppMode
-        var shiftOptionClickAction = Self.loadAction(from: userDefaults, forKey: shiftOptionClickActionKey) ?? Self.legacyShiftAction(for: clickAction)
+        var shiftOptionClickAction = Self.loadAction(from: userDefaults, forKey: shiftOptionClickActionKey) ?? .none
 
-        var shiftScrollUpAction = Self.loadAction(from: userDefaults, forKey: shiftScrollUpActionKey) ?? Self.legacyShiftAction(for: scrollUpAction)
-        var optionScrollUpAction = Self.loadAction(from: userDefaults, forKey: optionScrollUpActionKey) ?? Self.legacyOptionAction(for: scrollUpAction)
-        var shiftOptionScrollUpAction = Self.loadAction(from: userDefaults, forKey: shiftOptionScrollUpActionKey) ?? Self.legacyShiftAction(for: scrollUpAction)
+        var shiftScrollUpAction = Self.loadAction(from: userDefaults, forKey: shiftScrollUpActionKey) ?? .none
+        var optionScrollUpAction = Self.loadAction(from: userDefaults, forKey: optionScrollUpActionKey) ?? .none
+        var shiftOptionScrollUpAction = Self.loadAction(from: userDefaults, forKey: shiftOptionScrollUpActionKey) ?? .none
 
-        var shiftScrollDownAction = Self.loadAction(from: userDefaults, forKey: shiftScrollDownActionKey) ?? Self.legacyShiftAction(for: scrollDownAction)
-        var optionScrollDownAction = Self.loadAction(from: userDefaults, forKey: optionScrollDownActionKey) ?? Self.legacyOptionAction(for: scrollDownAction)
-        var shiftOptionScrollDownAction = Self.loadAction(from: userDefaults, forKey: shiftOptionScrollDownActionKey) ?? Self.legacyShiftAction(for: scrollDownAction)
+        var shiftScrollDownAction = Self.loadAction(from: userDefaults, forKey: shiftScrollDownActionKey) ?? .none
+        var optionScrollDownAction = Self.loadAction(from: userDefaults, forKey: optionScrollDownActionKey) ?? .none
+        var shiftOptionScrollDownAction = Self.loadAction(from: userDefaults, forKey: shiftOptionScrollDownActionKey) ?? .none
 
         let modifierMigrated = userDefaults.bool(forKey: modifierDefaultsMigratedKey)
         if !modifierMigrated {
             // Respect explicit values when present, otherwise seed new keys.
             if userDefaults.object(forKey: shiftClickActionKey) == nil {
-                shiftClickAction = Self.legacyShiftAction(for: clickAction)
+                shiftClickAction = .bringAllToFront
             }
             if userDefaults.object(forKey: optionClickActionKey) == nil {
                 optionClickAction = .singleAppMode
             }
             if userDefaults.object(forKey: shiftOptionClickActionKey) == nil {
-                shiftOptionClickAction = Self.legacyShiftAction(for: clickAction)
+                shiftOptionClickAction = .none
             }
 
             if userDefaults.object(forKey: shiftScrollUpActionKey) == nil {
-                shiftScrollUpAction = Self.legacyShiftAction(for: scrollUpAction)
+                shiftScrollUpAction = .none
             }
             if userDefaults.object(forKey: optionScrollUpActionKey) == nil {
-                optionScrollUpAction = Self.legacyOptionAction(for: scrollUpAction)
+                optionScrollUpAction = .none
             }
             if userDefaults.object(forKey: shiftOptionScrollUpActionKey) == nil {
-                shiftOptionScrollUpAction = Self.legacyShiftAction(for: scrollUpAction)
+                shiftOptionScrollUpAction = .none
             }
 
             if userDefaults.object(forKey: shiftScrollDownActionKey) == nil {
-                shiftScrollDownAction = Self.legacyShiftAction(for: scrollDownAction)
+                shiftScrollDownAction = .none
             }
             if userDefaults.object(forKey: optionScrollDownActionKey) == nil {
-                optionScrollDownAction = Self.legacyOptionAction(for: scrollDownAction)
+                optionScrollDownAction = .none
             }
             if userDefaults.object(forKey: shiftOptionScrollDownActionKey) == nil {
-                shiftOptionScrollDownAction = Self.legacyShiftAction(for: scrollDownAction)
+                shiftOptionScrollDownAction = .none
             }
 
             userDefaults.set(true, forKey: modifierDefaultsMigratedKey)
@@ -294,6 +352,14 @@ final class Preferences: ObservableObject {
             startAtLogin = userDefaults.object(forKey: startAtLoginKey) as? Bool ?? false
         }
 
+        let updateCheckFrequency: UpdateCheckFrequency
+        if let rawFrequency = userDefaults.string(forKey: updateCheckFrequencyKey),
+           let frequency = UpdateCheckFrequency(rawValue: rawFrequency) {
+            updateCheckFrequency = frequency
+        } else {
+            updateCheckFrequency = .daily
+        }
+
         // Assign stored properties last
         self.clickAction = clickAction
         self.shiftClickAction = shiftClickAction
@@ -310,6 +376,7 @@ final class Preferences: ObservableObject {
         self.showOnStartup = showOnStartup
         self.firstLaunchCompleted = firstLaunchCompleted
         self.startAtLogin = startAtLogin
+        self.updateCheckFrequency = updateCheckFrequency
     }
 
     private static func loadAction(from defaults: UserDefaults, forKey key: String) -> DockAction? {
@@ -322,27 +389,44 @@ final class Preferences: ObservableObject {
         defaults.set(action.rawValue, forKey: key)
     }
 
-    private static func legacyShiftAction(for base: DockAction) -> DockAction {
-        switch base {
-        case .hideApp, .hideOthers:
-            return .bringAllToFront
-        case .bringAllToFront:
-            return .hideApp
-        default:
-            return base
+    func resetMappingsToDefaults() {
+        clickAction = .appExpose
+        shiftClickAction = .bringAllToFront
+        optionClickAction = .singleAppMode
+        shiftOptionClickAction = .none
+
+        scrollUpAction = .hideOthers
+        shiftScrollUpAction = .none
+        optionScrollUpAction = .none
+        shiftOptionScrollUpAction = .none
+
+        scrollDownAction = .hideApp
+        shiftScrollDownAction = .none
+        optionScrollDownAction = .none
+        shiftOptionScrollDownAction = .none
+    }
+
+    func markUpdateCheckNow(_ date: Date = Date()) {
+        userDefaults.set(date.timeIntervalSince1970, forKey: lastUpdateCheckTimestampKey)
+    }
+
+    func shouldCheckForUpdatesOnLaunch(now: Date = Date()) -> Bool {
+        switch updateCheckFrequency {
+        case .never:
+            return false
+        case .startup:
+            return true
+        case .hourly, .sixHours, .twelveHours, .daily, .weekly:
+            guard let interval = updateCheckFrequency.interval else { return false }
+            guard let lastCheck = lastUpdateCheckDate() else { return true }
+            return now.timeIntervalSince(lastCheck) >= interval
         }
     }
 
-    private static func legacyOptionAction(for base: DockAction) -> DockAction {
-        switch base {
-        case .hideApp:
-            return .hideOthers
-        case .hideOthers:
-            return .hideApp
-        case .bringAllToFront:
-            return .hideOthers
-        default:
-            return base
-        }
+    private func lastUpdateCheckDate() -> Date? {
+        let timestamp = userDefaults.double(forKey: lastUpdateCheckTimestampKey)
+        guard timestamp > 0 else { return nil }
+        return Date(timeIntervalSince1970: timestamp)
     }
+
 }

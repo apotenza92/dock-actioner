@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		FA12B1D52F00111100DB8333 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = FA12B1D72F00111100DB8333 /* Sparkle */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		FA12B1922EFF98EC00DB8333 /* DockActioner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DockActioner.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -36,6 +40,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FA12B1D52F00111100DB8333 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +83,7 @@
 			);
 			name = DockActioner;
 			packageProductDependencies = (
+				FA12B1D72F00111100DB8333 /* Sparkle */,
 			);
 			productName = DockActioner;
 			productReference = FA12B1922EFF98EC00DB8333 /* DockActioner.app */;
@@ -111,6 +117,9 @@
 			productRefGroup = FA12B1932EFF98EC00DB8333 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
+			packageReferences = (
+				FA12B1D62F00111100DB8333 /* XCRemoteSwiftPackageReference \"Sparkle\" */,
+			);
 			targets = (
 				FA12B1912EFF98EC00DB8333 /* DockActioner */,
 			);
@@ -136,6 +145,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		FA12B1D62F00111100DB8333 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.6.4;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		FA12B1D72F00111100DB8333 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FA12B1D62F00111100DB8333 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		FA12B19B2EFF98ED00DB8333 /* Debug */ = {
@@ -275,7 +303,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 0.0.2;
+				MARKETING_VERSION = 0.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = pzc.DockActioner;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -308,7 +336,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 0.0.2;
+				MARKETING_VERSION = 0.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = pzc.DockActioner;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;

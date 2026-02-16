@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let statusMenu = NSMenu()
     private let coordinator = DockExposeCoordinator.shared
     private let preferences = Preferences.shared
+    private let updateManager = UpdateManager.shared
     private let settingsWindowIdentifier = NSUserInterfaceItemIdentifier("DockActionerSettingsWindow")
     private var fallbackPreferencesWindow: NSWindow?
 
@@ -26,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         configureStatusItem()
         coordinator.startIfPossible()
-        handlePermissionsIfNeeded()
+        updateManager.configureForLaunch(isAutomatedMode: isAutomatedMode)
 
         if ProcessInfo.processInfo.environment["DOCKACTIONER_AUTOTEST"] == "1" {
             Logger.log("Autotest enabled via DOCKACTIONER_AUTOTEST=1")
@@ -72,7 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         
-        let shouldShowWindow = !isAutomatedMode && (!preferences.firstLaunchCompleted || preferences.showOnStartup)
+        let isFirstLaunch = !preferences.firstLaunchCompleted
+        let shouldShowWindow = !isAutomatedMode && (isFirstLaunch || preferences.showOnStartup)
         DispatchQueue.main.async {
             if shouldShowWindow {
                 NSApp.activate(ignoringOtherApps: true)
@@ -80,7 +82,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             } else {
                 self.hidePreferencesWindow()
             }
-            if !self.preferences.firstLaunchCompleted {
+            self.handlePermissionsIfNeeded(allowPrompt: shouldShowWindow)
+            if isFirstLaunch {
                 self.preferences.firstLaunchCompleted = true
             }
         }
@@ -146,19 +149,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.terminate(nil)
     }
 
-    private func handlePermissionsIfNeeded() {
+    private func handlePermissionsIfNeeded(allowPrompt: Bool) {
         let needsAccessibility = !coordinator.hasAccessibilityPermission
         let needsInputMonitoring = !coordinator.inputMonitoringGranted
         guard needsAccessibility || needsInputMonitoring else { return }
 
-        if needsAccessibility {
+        if allowPrompt && needsAccessibility {
             coordinator.requestAccessibilityPermission()
         }
-        if needsInputMonitoring {
-            coordinator.requestInputMonitoringPermission()
+
+        if allowPrompt && needsInputMonitoring {
+            let delay: TimeInterval = needsAccessibility ? 0.6 : 0
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self else { return }
+                self.coordinator.requestInputMonitoringPermission()
+                self.coordinator.startWhenPermissionAvailable()
+                self.rebuildStatusMenu()
+            }
+        } else {
+            coordinator.startWhenPermissionAvailable()
+            rebuildStatusMenu()
         }
-        coordinator.startWhenPermissionAvailable()
-        rebuildStatusMenu()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -209,7 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         window.titleVisibility = .visible
         window.titlebarAppearsTransparent = false
         window.isMovableByWindowBackground = false
-        window.setContentSize(NSSize(width: 560, height: 620))
+        window.setContentSize(NSSize(width: 740, height: 520))
         window.center()
     }
 
@@ -221,12 +232,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 560, height: 620),
+            contentRect: NSRect(x: 0, y: 0, width: 740, height: 520),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
-        window.contentView = NSHostingView(rootView: PreferencesView(coordinator: DockExposeCoordinator.shared))
+        window.contentView = NSHostingView(rootView: PreferencesView(coordinator: DockExposeCoordinator.shared,
+                                                                      updateManager: UpdateManager.shared))
         configurePreferencesWindow(window)
         fallbackPreferencesWindow = window
         window.makeKeyAndOrderFront(nil)

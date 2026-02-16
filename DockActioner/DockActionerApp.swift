@@ -11,10 +11,13 @@ import AppKit
 @main
 struct DockActionerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    private let updateManager = UpdateManager.shared
+
     var body: some Scene {
         Settings {
-            PreferencesView(coordinator: DockExposeCoordinator.shared)
-                .frame(minWidth: 560, idealWidth: 560)
+            PreferencesView(coordinator: DockExposeCoordinator.shared,
+                            updateManager: updateManager)
+                .frame(minWidth: 740, idealWidth: 740)
         }
     }
 }

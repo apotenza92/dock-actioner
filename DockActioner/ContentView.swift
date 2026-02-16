@@ -3,169 +3,302 @@ import AppKit
 
 struct PreferencesView: View {
     @ObservedObject var coordinator: DockExposeCoordinator
+    @ObservedObject var updateManager: UpdateManager
     @ObservedObject var preferences = Preferences.shared
+    @State private var showingPermissionsInfo = false
+
+    private enum MappingSource {
+        case click
+        case scrollUp
+        case scrollDown
+    }
+
+    private enum MappingModifier: CaseIterable {
+        case none
+        case shift
+        case option
+        case shiftOption
+
+        var title: String {
+            switch self {
+            case .none:
+                return "None"
+            case .shift:
+                return "⇧ Shift"
+            case .option:
+                return "⌥ Option"
+            case .shiftOption:
+                return "⇧ Shift + ⌥ Option"
+            }
+        }
+    }
+
+    private let modifierColumnWidth: CGFloat = 150
+    private let actionColumnWidth: CGFloat = 185
+    private let contentFont: Font = .system(size: 14)
+    private let sectionTitleFont: Font = .system(size: 14, weight: .semibold)
+    private var tableWidth: CGFloat { modifierColumnWidth + (actionColumnWidth * 3) + 3 }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                appSettingsSection
-                Divider()
-                actionsSection
-                Divider()
-                permissionsSection
-            }
-            .padding(16)
-            .frame(minWidth: 560, idealWidth: 560, alignment: .topLeading)
+        VStack(alignment: .leading, spacing: 16) {
+            topSection
+            actionsSection
         }
-        .fixedSize(horizontal: false, vertical: false)
+        .font(contentFont)
+        .padding(16)
+        .frame(minWidth: 740, idealWidth: 740, alignment: .topLeading)
+    }
+
+    private var topSection: some View {
+        HStack(alignment: .top, spacing: 24) {
+            appSettingsSection
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            permissionsSection
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
     }
 
     private var appSettingsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("General")
-                .font(.headline)
-            Toggle("Show settings on startup", isOn: $preferences.showOnStartup)
-            Toggle("Start DockActioner at login", isOn: $preferences.startAtLogin)
+                .font(sectionTitleFont)
+            checkboxRow("Show settings on startup", isOn: $preferences.showOnStartup)
+            checkboxRow("Start DockActioner at login", isOn: $preferences.startAtLogin)
+            updateFrequencyRow
             HStack(spacing: 12) {
-                Button("Restart App", action: restartApp)
+                Button("Check for Updates", action: updateManager.checkForUpdates)
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!updateManager.canCheckForUpdates)
+                Button("Restart", action: restartApp)
                     .buttonStyle(.bordered)
                 Button("Quit", action: { NSApp.terminate(nil) })
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.bordered)
+            }
+        }
+    }
+
+    private var updateFrequencyRow: some View {
+        HStack(spacing: 10) {
+            Text("Update check frequency")
+            Spacer()
+            Picker("", selection: $preferences.updateCheckFrequency) {
+                ForEach(UpdateCheckFrequency.allCases) { frequency in
+                    Text(frequency.displayName).tag(frequency)
+                }
+            }
+            .labelsHidden()
+            .frame(width: 170)
+        }
+    }
+
+    private var permissionsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 6) {
+                Text("Permissions")
+                    .font(sectionTitleFont)
+                Button {
+                    showingPermissionsInfo = true
+                } label: {
+                    Image(systemName: "info.circle")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Permissions details")
+                .popover(isPresented: $showingPermissionsInfo, arrowEdge: .bottom) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("DockActioner needs these permissions to detect your Dock gestures and run the actions you configure.")
+                            .font(.subheadline)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("Accessibility")
+                            .font(.headline)
+                        Text("Lets DockActioner identify Dock icons and trigger actions in other apps.")
+                            .font(.subheadline)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("Input Monitoring")
+                            .font(.headline)
+                        Text("Lets DockActioner listen for global click and scroll gestures.")
+                            .font(.subheadline)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(12)
+                    .frame(width: 320, alignment: .leading)
+                }
+            }
+
+            HStack(alignment: .center, spacing: 16) {
+                permissionActionButton(
+                    title: "Accessibility",
+                    granted: coordinator.accessibilityGranted,
+                    action: openAccessibilitySettings
+                )
+                permissionActionButton(
+                    title: "Input Monitoring",
+                    granted: coordinator.inputMonitoringGranted,
+                    action: openInputMonitoringSettings
+                )
             }
         }
     }
 
     private var actionsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Action Mappings")
-                .font(.headline)
-
-            HStack(spacing: 12) {
-                Text("Input")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.secondary)
-                    .frame(width: 220, alignment: .leading)
-                Text("Action")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.secondary)
-                Spacer()
-            }
-
-            Divider()
-
-            mappingRow(label: "Click", selection: $preferences.clickAction)
-            mappingRow(label: "Shift + Click", selection: $preferences.shiftClickAction)
-            mappingRow(label: "Option + Click", selection: $preferences.optionClickAction)
-            mappingRow(label: "Shift + Option + Click", selection: $preferences.shiftOptionClickAction)
-
-            Divider()
-
-            mappingRow(label: "Scroll Up", selection: $preferences.scrollUpAction)
-            mappingRow(label: "Shift + Scroll Up", selection: $preferences.shiftScrollUpAction)
-            mappingRow(label: "Option + Scroll Up", selection: $preferences.optionScrollUpAction)
-            mappingRow(label: "Shift + Option + Scroll Up", selection: $preferences.shiftOptionScrollUpAction)
-
-            Divider()
-
-            mappingRow(label: "Scroll Down", selection: $preferences.scrollDownAction)
-            mappingRow(label: "Shift + Scroll Down", selection: $preferences.shiftScrollDownAction)
-            mappingRow(label: "Option + Scroll Down", selection: $preferences.optionScrollDownAction)
-            mappingRow(label: "Shift + Option + Scroll Down", selection: $preferences.shiftOptionScrollDownAction)
-        }
-    }
-
-    private func mappingRow(label: String, selection: Binding<DockAction>) -> some View {
-        HStack(spacing: 12) {
-            Text(label)
-                .frame(width: 220, alignment: .leading)
-            Picker("", selection: selection) {
-                ForEach(DockAction.allCases, id: \.self) { action in
-                    Text(action.displayName).tag(action)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .frame(width: 220)
-            Spacer()
-        }
-    }
-
-    private var shouldShowPermissionsBanner: Bool {
-        !coordinator.accessibilityGranted || !coordinator.inputMonitoringGranted
-    }
-
-    private var permissionsSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Permissions")
-                .font(.headline)
-
-            if shouldShowPermissionsBanner {
-                permissionsBanner
-            }
-
-            permissionRow(
-                title: "Accessibility",
-                detail: "Required to hit-test Dock icons and control other apps.",
-                granted: coordinator.accessibilityGranted,
-                actionTitle: coordinator.accessibilityGranted ? "Open Accessibility Settings" : "Grant Accessibility",
-                action: openAccessibilitySettings
-            )
-
-            permissionRow(
-                title: "Input Monitoring",
-                detail: "Required for the global event tap (clicks and scrolls).",
-                granted: coordinator.inputMonitoringGranted,
-                actionTitle: coordinator.inputMonitoringGranted ? "Open Input Monitoring Settings" : "Grant Input Monitoring",
-                action: openInputMonitoringSettings
-            )
-        }
-    }
-
-    private var permissionsBanner: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Permissions Needed")
-                .font(.headline)
-            Text("DockActioner needs Accessibility and Input Monitoring to detect Dock gestures.")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            HStack(spacing: 10) {
-                if !coordinator.accessibilityGranted {
-                    Button("Grant Accessibility", action: openAccessibilitySettings)
-                        .controlSize(.small)
-                }
-                if !coordinator.inputMonitoringGranted {
-                    Button("Grant Input Monitoring", action: openInputMonitoringSettings)
-                        .controlSize(.small)
-                }
-                Spacer()
-            }
-            Text("Tip: when developing, sign the app with a consistent identity (Xcode: Signing & Capabilities -> Team) so macOS does not treat each rebuild as a new app.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-    }
-
-    private func permissionRow(title: String,
-                               detail: String,
-                               granted: Bool,
-                               actionTitle: String?,
-                               action: (() -> Void)?) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            actionMappingTable
             HStack {
-                Text(title)
-                    .font(.body.weight(.semibold))
                 Spacer()
-                Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.circle")
-                    .foregroundColor(granted ? .green : .orange)
+                Button("Reset mappings to defaults") {
+                    preferences.resetMappingsToDefaults()
+                }
+                .buttonStyle(.bordered)
             }
-            Text(detail)
-                .font(.body)
-                .foregroundColor(.secondary)
-            if let actionTitle, let action {
-                Button(actionTitle, action: action)
-                    .controlSize(.small)
+            .frame(width: tableWidth, alignment: .trailing)
+        }
+    }
+
+    private func checkboxRow(_ title: String, isOn: Binding<Bool>) -> some View {
+        HStack(spacing: 9) {
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(.checkbox)
+            Button {
+                isOn.wrappedValue.toggle()
+            } label: {
+                Text(title)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var actionMappingTable: some View {
+        VStack(spacing: 0) {
+            mappingHeaderRow
+            mappingDataRow(for: .none, isLast: false)
+            mappingDataRow(for: .shift, isLast: false)
+            mappingDataRow(for: .option, isLast: false)
+            mappingDataRow(for: .shiftOption, isLast: true)
+        }
+        .font(.body)
+        .frame(width: tableWidth, alignment: .leading)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+        )
+    }
+
+    private var mappingHeaderRow: some View {
+        HStack(spacing: 0) {
+            tableHeaderText("Modifier", width: modifierColumnWidth)
+            verticalDivider
+            tableHeaderText("Click", width: actionColumnWidth)
+            verticalDivider
+            tableHeaderText("Scroll Up", width: actionColumnWidth)
+            verticalDivider
+            tableHeaderText("Scroll Down", width: actionColumnWidth)
+        }
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(height: 1)
+        }
+        .frame(height: 44)
+    }
+
+    private func mappingDataRow(for modifier: MappingModifier, isLast: Bool) -> some View {
+        HStack(spacing: 0) {
+            tableRowLabel(modifier.title, width: modifierColumnWidth)
+            verticalDivider
+            tablePickerCell(selection: mappingBinding(source: MappingSource.click, modifier: modifier), width: actionColumnWidth)
+            verticalDivider
+            tablePickerCell(selection: mappingBinding(source: MappingSource.scrollUp, modifier: modifier), width: actionColumnWidth)
+            verticalDivider
+            tablePickerCell(selection: mappingBinding(source: MappingSource.scrollDown, modifier: modifier), width: actionColumnWidth)
+        }
+        .overlay(alignment: .bottom) {
+            if !isLast {
+                Rectangle()
+                    .fill(Color(nsColor: .separatorColor))
+                    .frame(height: 1)
             }
         }
+        .frame(height: 44)
+    }
+
+    private var verticalDivider: some View {
+        Rectangle()
+            .fill(Color(nsColor: .separatorColor))
+            .frame(width: 1)
+    }
+
+    private func tableHeaderText(_ title: String, width: CGFloat) -> some View {
+        Text(title)
+            .font(sectionTitleFont)
+            .foregroundColor(.primary)
+            .padding(.horizontal, 10)
+            .frame(width: width, alignment: .leading)
+    }
+
+    private func tableRowLabel(_ title: String, width: CGFloat) -> some View {
+        Text(title)
+            .padding(.horizontal, 10)
+            .frame(width: width, alignment: .leading)
+    }
+
+    private func tablePickerCell(selection: Binding<DockAction>, width: CGFloat) -> some View {
+        Picker("", selection: selection) {
+            ForEach(DockAction.allCases, id: \.self) { action in
+                Text(action.displayName).tag(action)
+            }
+        }
+        .labelsHidden()
+        .pickerStyle(.menu)
+        .controlSize(.regular)
+        .frame(width: width - 20, alignment: .leading)
+        .padding(.horizontal, 10)
+        .frame(width: width, alignment: .leading)
+    }
+
+    private func mappingBinding(source: MappingSource, modifier: MappingModifier) -> Binding<DockAction> {
+        switch (source, modifier) {
+        case (.click, .none):
+            return $preferences.clickAction
+        case (.click, .shift):
+            return $preferences.shiftClickAction
+        case (.click, .option):
+            return $preferences.optionClickAction
+        case (.click, .shiftOption):
+            return $preferences.shiftOptionClickAction
+        case (.scrollUp, .none):
+            return $preferences.scrollUpAction
+        case (.scrollUp, .shift):
+            return $preferences.shiftScrollUpAction
+        case (.scrollUp, .option):
+            return $preferences.optionScrollUpAction
+        case (.scrollUp, .shiftOption):
+            return $preferences.shiftOptionScrollUpAction
+        case (.scrollDown, .none):
+            return $preferences.scrollDownAction
+        case (.scrollDown, .shift):
+            return $preferences.shiftScrollDownAction
+        case (.scrollDown, .option):
+            return $preferences.optionScrollDownAction
+        case (.scrollDown, .shiftOption):
+            return $preferences.shiftOptionScrollDownAction
+        }
+    }
+
+    private func permissionActionButton(title: String,
+                                        granted: Bool,
+                                        action: @escaping () -> Void) -> some View {
+        HStack(alignment: .center, spacing: 8) {
+            Button(title, action: action)
+                .buttonStyle(.bordered)
+            Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.circle")
+                .foregroundColor(granted ? .green : .orange)
+                .frame(width: 14)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func openAccessibilitySettings() {
@@ -187,13 +320,16 @@ struct PreferencesView: View {
     private func restartApp() {
         let bundleURL = Bundle.main.bundleURL
         let task = Process()
-        task.launchPath = "/usr/bin/open"
-        task.arguments = [bundleURL.path]
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        task.arguments = ["-n", bundleURL.path]
         do {
             try task.run()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                NSApp.terminate(nil)
+            }
         } catch {
             Logger.log("Failed to relaunch app: \(error.localizedDescription)")
+            return
         }
-        NSApp.terminate(nil)
     }
 }

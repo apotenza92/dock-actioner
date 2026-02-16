@@ -1,10 +1,18 @@
 # Changelog
 
-All notable changes to this project are documented in this file.
+All notable changes to this project are documented in this file (stable and beta releases share this one changelog).
 
 ## [Unreleased]
 
 - Ongoing development.
+
+## [v0.0.3]
+
+- Added native Sparkle updater integration with an in-app "Check for Updates" flow and configurable update check frequency in Settings.
+- Added signed Sparkle appcasts for stable/beta and arm64/x64, with release automation that regenerates and publishes appcasts from GitHub releases.
+- Unified release notes to a single `CHANGELOG.md` source used by both GitHub Releases and Sparkle update descriptions.
+- Improved first-run permission prompting for Accessibility and Input Monitoring and refreshed the compact settings layout with a table-based mapping editor.
+- Added a no-op (`-`) action option, updated modifier defaults (`Shift+Click` -> Bring All to Front), and a "Reset mappings to defaults" control.
 
 ## [v0.0.2]
 

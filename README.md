@@ -12,6 +12,7 @@ DockActioner is a lightweight macOS menu bar app that adds gesture actions to Do
 - Scroll over any Dock icon for quick app/window management.
 - App Expose trigger uses Dock notification (`com.apple.expose.front.awake`) for reliability.
 - Starts at login (optional) and runs as a menu bar utility.
+- In-app Sparkle updater with configurable check frequency.
 
 ## Install
 
@@ -52,6 +53,18 @@ Open from macOS System Settings:
 
 Open **Preferences** from the menu bar icon.
 
+## Updates
+
+- DockActioner uses Sparkle for native in-app updates.
+- Use **Check for Updates** in Settings for a manual check.
+- Configure automatic check frequency in **Settings > General**.
+- Sparkle release notes are generated from the matching entry in `CHANGELOG.md`.
+- Appcasts are published to:
+  - `appcasts/stable-arm64.xml`
+  - `appcasts/stable-x64.xml`
+  - `appcasts/beta-arm64.xml`
+  - `appcasts/beta-x64.xml`
+
 ### Actions
 
 - Click
@@ -81,6 +94,7 @@ Releases are tag-driven via GitHub Actions.
 
 - Pushes to `main` run CI only (build verification).
 - Pushing a tag creates signed, notarized release artifacts.
+- Release workflow also refreshes Sparkle appcast files in `appcasts/`.
 
 Supported tags:
 
@@ -106,6 +120,7 @@ Required repository secrets:
 - `APPLE_NOTARYTOOL_KEY_ID`
 - `APPLE_NOTARYTOOL_ISSUER_ID`
 - `APPLE_NOTARYTOOL_KEY_P8_BASE64`
+- `SPARKLE_PRIVATE_ED_KEY` (base64-encoded Ed25519 private seed exported from Sparkle `generate_keys -x`)
 
 Homebrew tap automation (cross-repo push):
 
@@ -127,6 +142,19 @@ base64 < dockactioner-signing.p12 | pbcopy
 ```
 
 `APPLE_NOTARYTOOL_KEY_ID`, `APPLE_NOTARYTOOL_ISSUER_ID`, and `APPLE_NOTARYTOOL_KEY_P8_BASE64` come from an App Store Connect API key you generate in App Store Connect.
+
+Sparkle key management (one-time setup):
+
+```bash
+# Print your public key (commit this as SUPublicEDKey)
+"$SPARKLE_BIN/generate_keys" -p
+
+# Export private key seed and store as GitHub secret SPARKLE_PRIVATE_ED_KEY
+"$SPARKLE_BIN/generate_keys" -x /tmp/dockactioner-sparkle-private.txt
+cat /tmp/dockactioner-sparkle-private.txt
+```
+
+Where `SPARKLE_BIN` points to Sparkle tools inside your local Xcode DerivedData checkout (for example: `.../SourcePackages/artifacts/sparkle/Sparkle/bin`).
 
 ## Homebrew Tap Automation
 
