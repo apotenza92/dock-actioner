@@ -1885,7 +1885,7 @@ final class DockExposeCoordinator: ObservableObject {
         }
 
         if frontmostBefore != clickedBundle {
-            if lastTriggeredBundle != nil {
+            if lastTriggeredBundle != nil, appExposeInvocationToken != nil {
                 return false
             }
             return shouldConsumeFirstClickAction(for: clickedBundle, flags: flags)
