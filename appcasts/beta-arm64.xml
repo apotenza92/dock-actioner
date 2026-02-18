@@ -5,19 +5,18 @@
     <description>DockActioner update feed (beta channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.0.6</title>
-      <link>https://github.com/apotenza92/dock-actioner/releases/tag/v0.0.6</link>
-      <sparkle:version>690000</sparkle:version>
-      <sparkle:shortVersionString>0.0.6</sparkle:shortVersionString>
+      <title>Version 0.0.7</title>
+      <link>https://github.com/apotenza92/dock-actioner/releases/tag/v0.0.7</link>
+      <sparkle:version>790000</sparkle:version>
+      <sparkle:shortVersionString>0.0.7</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/dock-actioner/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Fixed App Expose re-entry handling so clicking a Dock icon after selecting a window from App Expose reliably triggers "Click after App activation" actions.
-- Added a dedicated App Expose re-entry regression suite that reproduces picker-selection then same-icon re-click behavior and verifies App Expose dispatch.
-- Hardened action test dispatch timing to avoid retry-induced toggle flakiness in `click hideOthers`.]]></description>
-      <pubDate>Wed, 18 Feb 2026 02:48:55 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/dock-actioner/releases/download/v0.0.6/DockActioner-Beta-v0.0.6-macos-arm64.zip"
-                 sparkle:edSignature="yqwDz7P+UMrpRGhpgCFqW/v6rIViDi2ITYn+gm+GuINg5z1AYcYI3yuNQmU1qT2Q+CJSoXo14EATG18sElnXDg=="
-                 length="2681288"
+      <description sparkle:format="plain-text"><![CDATA[- Fixed first-click App Expose interception so when `>1 window only` is off, repeated first clicks on running apps continue dispatching App Expose instead of falling back to Dock activation.
+- Added/validated automated first-click and App Expose re-entry regression coverage for this flow.]]></description>
+      <pubDate>Wed, 18 Feb 2026 05:46:22 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/dock-actioner/releases/download/v0.0.7/DockActioner-Beta-v0.0.7-macos-arm64.zip"
+                 sparkle:edSignature="FwWmsrA4sixfDzWNPhoJ0xlu6JEmaxwqZcMSdWhqTPBp51kt6GlJbfm4TGIfJobTTqbwQeYw9Gps3UazCUA3Bw=="
+                 length="2681544"
                  type="application/octet-stream" />
     </item>
   </channel>
