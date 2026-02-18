@@ -5,18 +5,19 @@
     <description>DockActioner update feed (stable channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.0.5</title>
-      <link>https://github.com/apotenza92/dock-actioner/releases/tag/v0.0.5</link>
-      <sparkle:version>590000</sparkle:version>
-      <sparkle:shortVersionString>0.0.5</sparkle:shortVersionString>
+      <title>Version 0.0.6</title>
+      <link>https://github.com/apotenza92/dock-actioner/releases/tag/v0.0.6</link>
+      <sparkle:version>690000</sparkle:version>
+      <sparkle:shortVersionString>0.0.6</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/dock-actioner/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Updated defaults so first click (no modifier) uses App Expose with the "requires multiple windows" safeguard enabled.
-- Updated "Reset mappings to defaults" to restore the same first-click App Expose behavior.]]></description>
-      <pubDate>Wed, 18 Feb 2026 01:37:42 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/dock-actioner/releases/download/v0.0.5/DockActioner-v0.0.5-macos-arm64.zip"
-                 sparkle:edSignature="hIGeyoW1Xjy127s5RAkBNbeT7SaE4AtkIGT+9TSLczOw6pvYs/wLXhs5t7LRc2aQvhbphY+0lfXVfoi0wjilDw=="
-                 length="4452132"
+      <description sparkle:format="plain-text"><![CDATA[- Fixed App Expose re-entry handling so clicking a Dock icon after selecting a window from App Expose reliably triggers "Click after App activation" actions.
+- Added a dedicated App Expose re-entry regression suite that reproduces picker-selection then same-icon re-click behavior and verifies App Expose dispatch.
+- Hardened action test dispatch timing to avoid retry-induced toggle flakiness in `click hideOthers`.]]></description>
+      <pubDate>Wed, 18 Feb 2026 02:48:55 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/dock-actioner/releases/download/v0.0.6/DockActioner-v0.0.6-macos-arm64.zip"
+                 sparkle:edSignature="Tg0zEVGxP+XArdz8YWzCEBJf9Vk3+u8C88Zip5aPn3vntw4uq/ubkVdyD04uLufIr/5w6rnQlBCa2H0ljixoBA=="
+                 length="4457788"
                  type="application/octet-stream" />
     </item>
   </channel>
