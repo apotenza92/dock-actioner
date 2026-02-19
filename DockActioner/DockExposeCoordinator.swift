@@ -3495,11 +3495,22 @@ final class DockExposeCoordinator: ObservableObject {
             if consumeNow != context.consumeClick {
                 Logger.debug("WORKFLOW: Click consume mismatch planned=\(context.consumeClick) actual=\(consumeNow)")
             }
-            if context.consumeClick {
+            if context.consumeClick && shouldRunDockPressedStateRecovery() {
                 scheduleDockPressedStateRecovery(at: context.location, expectedBundle: context.clickedBundle)
             }
             return context.consumeClick
         }
+    }
+
+    private func shouldRunDockPressedStateRecovery() -> Bool {
+        let env = ProcessInfo.processInfo.environment
+        if env["DOCKACTIONER_APPEXPOSE_CARTESIAN_TEST"] == "1" {
+            return true
+        }
+        if env["DOCKACTIONER_DOCK_RELEASE_RECOVERY"] == "1" {
+            return true
+        }
+        return false
     }
 
     private func scheduleDockPressedStateRecovery(at location: CGPoint, expectedBundle: String) {
