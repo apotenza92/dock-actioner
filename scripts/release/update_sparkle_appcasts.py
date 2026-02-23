@@ -42,6 +42,7 @@ class ParsedTag:
 class ReleaseAsset:
     name: str
     size: int
+    api_url: str
     download_url: str
 
 
@@ -170,6 +171,7 @@ def fetch_releases(repo: str, github_token: str | None) -> list[Release]:
             ReleaseAsset(
                 name=str(asset.get("name", "")),
                 size=int(asset.get("size", 0)),
+                api_url=str(asset.get("url", "")),
                 download_url=str(asset.get("browser_download_url", "")),
             )
             for asset in item.get("assets", [])
@@ -228,13 +230,22 @@ def load_signing_key(signing_secret: str | None) -> Ed25519PrivateKey | None:
     )
 
 
-def download_asset(asset: ReleaseAsset, destination: Path) -> None:
+def download_asset(
+    asset: ReleaseAsset, destination: Path, github_token: str | None = None
+) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    headers = {
-        "Accept": "application/octet-stream",
-        "User-Agent": "dockter-sparkle-signature-sync",
-    }
-    request = urllib.request.Request(asset.download_url, headers=headers)
+
+    headers = {"User-Agent": "dockter-sparkle-signature-sync"}
+    download_url = asset.download_url
+    if github_token and asset.api_url:
+        # Private repositories require authenticated asset fetches via API URL.
+        headers["Authorization"] = f"Bearer {github_token}"
+        headers["Accept"] = "application/octet-stream"
+        download_url = asset.api_url
+    else:
+        headers["Accept"] = "application/octet-stream"
+
+    request = urllib.request.Request(download_url, headers=headers)
 
     with urllib.request.urlopen(request, timeout=60) as response:
         data = response.read()
@@ -245,11 +256,12 @@ def sign_asset(
     asset: ReleaseAsset,
     private_key: Ed25519PrivateKey,
     cache_dir: Path,
+    github_token: str | None = None,
 ) -> str:
     path = cache_dir / asset.name
 
     if not path.exists() or path.stat().st_size != asset.size:
-        download_asset(asset, path)
+        download_asset(asset, path, github_token=github_token)
 
     payload = path.read_bytes()
     signature = private_key.sign(payload)
@@ -415,7 +427,9 @@ def main() -> int:
                 beta_x64_asset.name: beta_x64_asset,
             }
             for asset in unique_assets.values():
-                signatures[asset.name] = sign_asset(asset, private_key, cache_dir)
+                signatures[asset.name] = sign_asset(
+                    asset, private_key, cache_dir, github_token=github_token
+                )
 
     appcasts = {
         "stable-arm64.xml": render_appcast(
