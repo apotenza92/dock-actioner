@@ -2,6 +2,13 @@ import AppKit
 import ApplicationServices
 
 enum WindowManager {
+    private static let braveBundleIdentifier = "com.brave.Browser"
+    private static let braveAuxiliarySubroles: Set<String> = [
+        "AXFloatingWindow",
+        "AXSystemFloatingWindow",
+        "AXUnknown"
+    ]
+
     /// Hide all windows of an app (Cmd+H equivalent)
     static func hideAllWindows(bundleIdentifier: String) -> Bool {
         guard let app = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == bundleIdentifier }) else {
@@ -59,15 +66,9 @@ enum WindowManager {
         if app.isHidden {
             app.unhide()
         }
-        let pid = app.processIdentifier
-        
-        let appElement = AXUIElementCreateApplication(pid)
-        var windows: CFTypeRef?
-        let result = AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windows)
-        
-        guard result == .success,
-              let windowsArray = windows as? [AXUIElement] else {
-            Logger.log("WindowManager: Failed to get windows for \(bundleIdentifier)")
+        let windowsArray = appWindows(for: app)
+        guard !windowsArray.isEmpty else {
+            Logger.log("WindowManager: No windows to minimize for \(bundleIdentifier)")
             return false
         }
         
@@ -97,14 +98,9 @@ enum WindowManager {
             return false
         }
         
-        let pid = app.processIdentifier
-        let appElement = AXUIElementCreateApplication(pid)
-        var windows: CFTypeRef?
-        let result = AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windows)
-        
-        guard result == .success,
-              let windowsArray = windows as? [AXUIElement] else {
-            Logger.log("WindowManager: Failed to get windows for \(bundleIdentifier) when restoring")
+        let windowsArray = appWindows(for: app)
+        guard !windowsArray.isEmpty else {
+            Logger.log("WindowManager: No windows to restore for \(bundleIdentifier)")
             return false
         }
         
@@ -141,14 +137,8 @@ enum WindowManager {
             return false
         }
         
-        let pid = app.processIdentifier
-        let appElement = AXUIElementCreateApplication(pid)
-        var windows: CFTypeRef?
-        let result = AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windows)
-        
-        guard result == .success,
-              let windowsArray = windows as? [AXUIElement],
-              !windowsArray.isEmpty else {
+        let windowsArray = appWindows(for: app)
+        guard !windowsArray.isEmpty else {
             return false
         }
         
@@ -170,14 +160,8 @@ enum WindowManager {
             return false
         }
         
-        let pid = app.processIdentifier
-        
-        let appElement = AXUIElementCreateApplication(pid)
-        var windows: CFTypeRef?
-        let result = AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windows)
-        
-        guard result == .success,
-              let windowsArray = windows as? [AXUIElement] else {
+        let windowsArray = appWindows(for: app)
+        guard !windowsArray.isEmpty else {
             return false
         }
         
@@ -207,13 +191,7 @@ enum WindowManager {
             return 0
         }
 
-        let appElement = AXUIElementCreateApplication(app.processIdentifier)
-        var windows: CFTypeRef?
-        let result = AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windows)
-        guard result == .success, let windowsArray = windows as? [AXUIElement] else {
-            return 0
-        }
-        return windowsArray.count
+        return appWindows(for: app).count
     }
 
     /// True when the app currently reports at least two windows.
@@ -237,10 +215,7 @@ enum WindowManager {
               let windowRef = mainWindow,
               CFGetTypeID(windowRef) == AXUIElementGetTypeID() else {
             // Try getting first window if no main window
-            var windows: CFTypeRef?
-            if AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windows) == .success,
-               let windowsArray = windows as? [AXUIElement],
-               let firstWindow = windowsArray.first {
+            if let firstWindow = appWindows(for: app).first {
                 return firstWindow
             }
             return nil
@@ -306,11 +281,8 @@ enum WindowManager {
             return false
         }
         
-        let pid = app.processIdentifier
-        let appElement = AXUIElementCreateApplication(pid)
-        var windowsRef: CFTypeRef?
-        let result = AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windowsRef)
-        guard result == .success, let windows = windowsRef as? [AXUIElement], !windows.isEmpty else {
+        let windows = appWindows(for: app)
+        guard !windows.isEmpty else {
             Logger.log("WindowManager: No windows to bring front for \(bundleIdentifier)")
             return false
         }
@@ -415,5 +387,83 @@ enum WindowManager {
         }
         return app.isTerminated
     }
-    
+
+    private static func appWindows(for app: NSRunningApplication) -> [AXUIElement] {
+        let appElement = AXUIElementCreateApplication(app.processIdentifier)
+        var windowsRef: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windowsRef)
+        guard result == .success, let rawWindows = windowsRef as? [AXUIElement] else {
+            return []
+        }
+
+        guard let bundleIdentifier = app.bundleIdentifier else {
+            return rawWindows
+        }
+        return rawWindows.filter { shouldIncludeWindow($0, bundleIdentifier: bundleIdentifier) }
+    }
+
+    private static func shouldIncludeWindow(_ window: AXUIElement, bundleIdentifier: String) -> Bool {
+        if let role = stringAttribute(window, attribute: kAXRoleAttribute as CFString),
+           role != (kAXWindowRole as String) {
+            return false
+        }
+
+        if bundleIdentifier == braveBundleIdentifier,
+           isLikelyBraveAuxiliaryWindow(window) {
+            let title = stringAttribute(window, attribute: kAXTitleAttribute as CFString) ?? "nil"
+            let subrole = stringAttribute(window, attribute: kAXSubroleAttribute as CFString) ?? "nil"
+            let identifier = stringAttribute(window, attribute: "AXIdentifier" as CFString) ?? "nil"
+            Logger.debug("WindowManager: Excluding Brave auxiliary window title=\(title) subrole=\(subrole) identifier=\(identifier)")
+            return false
+        }
+
+        return true
+    }
+
+    private static func isLikelyBraveAuxiliaryWindow(_ window: AXUIElement) -> Bool {
+        let subrole = stringAttribute(window, attribute: kAXSubroleAttribute as CFString) ?? ""
+        if braveAuxiliarySubroles.contains(subrole) {
+            return true
+        }
+
+        let textFields = [
+            stringAttribute(window, attribute: kAXTitleAttribute as CFString),
+            stringAttribute(window, attribute: "AXIdentifier" as CFString),
+            stringAttribute(window, attribute: kAXDescriptionAttribute as CFString)
+        ]
+        let containsSidebarMarker = textFields
+            .compactMap { $0?.lowercased() }
+            .contains { value in
+                value.contains("sidebar") || value.contains("side panel") || value.contains("sidepanel") || value.contains("vertical tabs")
+            }
+        guard containsSidebarMarker else {
+            return false
+        }
+
+        let hasTrafficLightControls =
+            hasElementAttribute(window, attribute: kAXCloseButtonAttribute as CFString) ||
+            hasElementAttribute(window, attribute: kAXMinimizeButtonAttribute as CFString) ||
+            hasElementAttribute(window, attribute: kAXZoomButtonAttribute as CFString)
+        return !hasTrafficLightControls
+    }
+
+    private static func stringAttribute(_ element: AXUIElement, attribute: CFString) -> String? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success,
+              let value,
+              CFGetTypeID(value) == CFStringGetTypeID() else {
+            return nil
+        }
+        return value as? String
+    }
+
+    private static func hasElementAttribute(_ element: AXUIElement, attribute: CFString) -> Bool {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success,
+              let value else {
+            return false
+        }
+        return CFGetTypeID(value) == AXUIElementGetTypeID()
+    }
+
 }

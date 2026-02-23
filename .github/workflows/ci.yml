@@ -16,24 +16,24 @@ jobs:
       matrix:
         include:
           - channel: stable
-            product_name: DockActioner
-            bundle_id: pzc.DockActioner
+            product_name: Dockter
+            bundle_id: pzc.Dockter
             app_icon: AppIcon
           - channel: beta
-            product_name: DockActioner Beta
-            bundle_id: pzc.DockActioner.beta
+            product_name: Dockter Beta
+            bundle_id: pzc.Dockter.beta
             app_icon: AppIconBeta
     runs-on: macos-15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build DockActioner (${{ matrix.channel }})
+      - name: Build Dockter (${{ matrix.channel }})
         run: |
           set -euo pipefail
           xcodebuild \
-            -project DockActioner.xcodeproj \
-            -scheme DockActioner \
+            -project Dockter.xcodeproj \
+            -scheme Dockter \
             -configuration Release \
             -destination "generic/platform=macOS" \
             PRODUCT_NAME="${{ matrix.product_name }}" \

@@ -134,18 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
-        _ = NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        _ = NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-            guard let self else { return }
-            if let window = self.currentPreferencesWindow {
-                self.configurePreferencesWindow(window)
-                window.makeKeyAndOrderFront(nil)
-                return
-            }
-            self.showFallbackPreferencesWindow()
-        }
+        showFallbackPreferencesWindow()
     }
     
     private func hidePreferencesWindow() {

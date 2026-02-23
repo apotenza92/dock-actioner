@@ -6,6 +6,13 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
+## [v0.0.9]
+
+- Fixed Brave vertical-tabs compatibility so sidebar/auxiliary panes are excluded from window counts used by first-click App Expose and `>1 window only`.
+- Improved first-click App Expose fallback behavior and tracing around mouse-down/up window-state decisions.
+- Simplified settings-window presentation to use the fallback preferences window path directly.
+- Updated CI workflow references from legacy `DockActioner` names to `Dockter` project/scheme/product identifiers.
+
 ## [v0.0.8]
 
 - Added a focused App Expose cartesian harness profile (Finder + TextEdit) with machine-readable artifacts and deterministic scenario IDs for gate/cancel reliability testing.
