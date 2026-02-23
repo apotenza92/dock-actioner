@@ -282,14 +282,14 @@ struct PreferencesView: View {
                     .controlSize(.regular)
                     .frame(width: width - 20, alignment: .leading)
 
-                    if shouldShowFirstClickMultipleWindowsToggle {
+                    if shouldShowAppExposeMultipleWindowsToggle {
                         Toggle(">1 window only", isOn: $preferences.firstClickAppExposeRequiresMultipleWindows)
                             .toggleStyle(.checkbox)
                             .font(.system(size: 12))
                     }
                 }
                 .padding(.horizontal, 10)
-                .padding(.vertical, shouldShowFirstClickMultipleWindowsToggle ? 6 : 0)
+                .padding(.vertical, shouldShowAppExposeMultipleWindowsToggle ? 6 : 0)
             } else {
                 tablePickerCell(selection: firstClickActionBinding(for: modifier), width: width)
             }
@@ -298,14 +298,14 @@ struct PreferencesView: View {
     }
 
     private func rowHeight(for modifier: MappingModifier) -> CGFloat {
-        if modifier == .none && shouldShowFirstClickMultipleWindowsToggle {
+        if modifier == .none && shouldShowAppExposeMultipleWindowsToggle {
             return expandedFirstClickRowHeight
         }
         return rowHeight
     }
 
-    private var shouldShowFirstClickMultipleWindowsToggle: Bool {
-        preferences.firstClickBehavior == .appExpose
+    private var shouldShowAppExposeMultipleWindowsToggle: Bool {
+        preferences.firstClickBehavior == .appExpose || preferences.clickAction == .appExpose
     }
 
     private func firstClickActionBinding(for modifier: MappingModifier) -> Binding<DockAction> {

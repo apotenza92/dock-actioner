@@ -6,6 +6,12 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
+## [v0.0.10]
+
+- Fixed Single App Mode so switching apps hides only the app you are leaving, then shows/activates the app you click.
+- Extended the `>1 window only` App Expose preference to also apply to the "Click after App activation" App Expose path.
+- Simplified and refreshed README documentation, including the app icon and streamlined install/build/release guidance.
+
 ## [v0.0.9]
 
 - Fixed Brave vertical-tabs compatibility so sidebar/auxiliary panes are excluded from window counts used by first-click App Expose and `>1 window only`.

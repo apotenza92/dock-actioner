@@ -602,6 +602,11 @@ final class DockExposeCoordinator: ObservableObject {
                 // Let Dock handle the click (e.g. create/show a window) without immediately opening App Exposé.
                 return false
             }
+            if preferences.firstClickAppExposeRequiresMultipleWindows, windowCountNow < 2 {
+                Logger.debug("APP_EXPOSE_DECISION: click appExpose skipped for \(clickedBundle): fewer than two windows")
+                // Respect the >1 window App Exposé preference for click-after-activation too.
+                return false
+            }
             Logger.debug("WORKFLOW: App Exposé trigger from click")
             triggerAppExpose(for: clickedBundle)
             // Never consume App Exposé clicks; let Dock see the full click lifecycle.
@@ -1167,16 +1172,20 @@ final class DockExposeCoordinator: ObservableObject {
     }
 
     private func performSingleAppMode(targetBundleIdentifier: String, frontmostBefore: String?) {
-        Logger.debug("WORKFLOW: Single app mode target=\(targetBundleIdentifier), frontmostBefore=\(frontmostBefore ?? "nil")")
+        let frontmostNow = FrontmostAppTracker.frontmostBundleIdentifier()
+        let sourceBundleToHide = [frontmostBefore, frontmostNow]
+            .compactMap { $0 }
+            .first(where: { $0 != targetBundleIdentifier })
 
-        if frontmostBefore == targetBundleIdentifier {
+        Logger.debug("WORKFLOW: Single app mode target=\(targetBundleIdentifier), frontmostBefore=\(frontmostBefore ?? "nil"), frontmostNow=\(frontmostNow ?? "nil"), sourceToHide=\(sourceBundleToHide ?? "nil")")
+
+        if let sourceBundleToHide {
+            _ = WindowManager.hideAllWindows(bundleIdentifier: sourceBundleToHide)
+        } else if frontmostBefore == targetBundleIdentifier || frontmostNow == targetBundleIdentifier {
+            // Toggle-off behavior when the user targets the current app.
             _ = WindowManager.hideAllWindows(bundleIdentifier: targetBundleIdentifier)
             resetExposeTracking()
             return
-        }
-
-        if let frontmostBefore {
-            _ = WindowManager.hideAllWindows(bundleIdentifier: frontmostBefore)
         }
 
         let targetRunning = NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier == targetBundleIdentifier }
