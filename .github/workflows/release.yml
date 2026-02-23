@@ -446,13 +446,14 @@ jobs:
           set -euo pipefail
           cd /tmp/homebrew-tap
 
-          if git diff --quiet -- Casks/docktor.rb Casks/docktor@beta.rb; then
+          git add Casks/docktor.rb Casks/docktor@beta.rb
+
+          if git diff --cached --quiet -- Casks/docktor.rb Casks/docktor@beta.rb; then
             echo "No Homebrew cask changes to push."
             exit 0
           fi
 
           git config user.name "docktor-release-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add Casks/docktor.rb Casks/docktor@beta.rb
           git commit -m "Update Docktor casks from release metadata"
           git push origin main
