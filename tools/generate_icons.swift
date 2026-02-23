@@ -66,7 +66,7 @@ let iconSets: [IconSet] = [
 
 let fm = FileManager.default
 let cwd = URL(fileURLWithPath: fm.currentDirectoryPath)
-let assetsCatalog = cwd.appendingPathComponent("Dockter/Assets.xcassets", isDirectory: true)
+let assetsCatalog = cwd.appendingPathComponent("Docktor/Assets.xcassets", isDirectory: true)
 
 func roundedRect(_ rect: NSRect, radius: CGFloat) -> NSBezierPath {
     NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
@@ -251,7 +251,7 @@ func writePNG(_ image: NSImage, to url: URL) throws {
     guard let tiff = image.tiffRepresentation,
           let rep = NSBitmapImageRep(data: tiff),
           let data = rep.representation(using: .png, properties: [:]) else {
-        throw NSError(domain: "DockterIcon", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to encode PNG"])
+        throw NSError(domain: "DocktorIcon", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to encode PNG"])
     }
     try data.write(to: url, options: .atomic)
 }

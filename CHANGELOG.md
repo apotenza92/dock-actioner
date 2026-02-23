@@ -6,6 +6,13 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
+## [v0.0.10]
+
+- Renamed the product, project, release workflows, scripts, and repository from `Dockter` to `Docktor`.
+- Kept existing bundle identifiers (`pzc.Dockter` / `pzc.Dockter.beta`) so existing Sparkle users continue to upgrade in place.
+- Added launch-time migration that renames legacy installs (`DockActioner.app` and `Dockter.app`) to `Docktor.app` in `/Applications`.
+- Updated release automation and Sparkle appcast tooling for the new repository slug and `Docktor` artifact/cask names.
+
 ## [v0.0.9]
 
 - Fixed Single App Mode so switching apps hides only the app you are leaving, then shows/activates the app you click.
@@ -14,7 +21,7 @@ All notable changes to this project are documented in this file (stable and beta
 - Improved first-click App Expose fallback behavior and tracing around mouse-down/up window-state decisions.
 - Simplified settings-window presentation to use the fallback preferences window path directly.
 - Simplified and refreshed README documentation, including the app icon and streamlined install/build/release guidance.
-- Updated CI workflow references from legacy `DockActioner` names to `Dockter` project/scheme/product identifiers.
+- Updated CI workflow references from legacy `DockActioner` names to `Docktor` project/scheme/product identifiers.
 
 ## [v0.0.8]
 
@@ -59,7 +66,7 @@ All notable changes to this project are documented in this file (stable and beta
 - Added full per-modifier action mapping with a table-style settings UI and new Single App Mode action.
 - Fixed Preferences opening from the status menu and simplified menu actions to Preferences + Quit.
 - Refined app and status-bar iconography, including a separate beta app icon set and larger menu bar glyph.
-- Added side-by-side beta distribution support (`Dockter Beta.app`) across CI, release packaging, and Homebrew casks.
+- Added side-by-side beta distribution support (`Docktor Beta.app`) across CI, release packaging, and Homebrew casks.
 
 ## [v0.0.1]
 

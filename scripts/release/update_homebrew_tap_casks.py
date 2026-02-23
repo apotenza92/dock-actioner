@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Update Dockter Homebrew casks in apotenza92/homebrew-tap.
+"""Update Docktor Homebrew casks in apotenza92/homebrew-tap.
 
 Policy:
 - Stable cask tracks latest stable tag (vX.Y.Z).
 - Beta cask tracks whichever is newer between latest stable and latest prerelease.
   This keeps beta-channel users moving forward even when stable surpasses beta.
-- Beta artifacts install side-by-side as Dockter Beta.app.
+- Beta artifacts install side-by-side as Docktor Beta.app.
 """
 
 from __future__ import annotations
@@ -114,7 +114,7 @@ def fetch_releases(repo: str, github_token: str | None) -> list[Release]:
     req = urllib.request.Request(
         url,
         headers=build_api_headers(
-            user_agent="dockter-homebrew-sync", github_token=github_token
+            user_agent="docktor-homebrew-sync", github_token=github_token
         ),
     )
 
@@ -187,7 +187,7 @@ def sha256_for_asset(
     request = urllib.request.Request(
         asset.download_url,
         headers=build_api_headers(
-            user_agent="dockter-homebrew-sha256", github_token=github_token
+            user_agent="docktor-homebrew-sha256", github_token=github_token
         )
         | {"Accept": "application/octet-stream"},
     )
@@ -212,7 +212,7 @@ def render_stable_cask(
     intel_url: str,
     intel_sha256: str,
 ) -> str:
-    return f'''cask "dockter" do
+    return f'''cask "docktor" do
   version "{version}"
 
   on_arm do
@@ -225,7 +225,7 @@ def render_stable_cask(
     sha256 "{intel_sha256}"
   end
 
-  name "Dockter"
+  name "Docktor"
   desc "Dock gesture actions for macOS"
   homepage "https://github.com/{repo}"
 
@@ -234,10 +234,10 @@ def render_stable_cask(
     strategy :github_latest
   end
 
-  app "Dockter.app"
+  app "Docktor.app"
 
   zap trash: [
-    "~/Library/Application Support/Dockter",
+    "~/Library/Application Support/Docktor",
     "~/Library/Caches/pzc.Dockter",
     "~/Library/Preferences/pzc.Dockter.plist",
     "~/Library/Saved Application State/pzc.Dockter.savedState",
@@ -254,7 +254,7 @@ def render_beta_cask(
     intel_url: str,
     intel_sha256: str,
 ) -> str:
-    return f'''cask "dockter@beta" do
+    return f'''cask "docktor@beta" do
   version "{version}"
 
   on_arm do
@@ -267,8 +267,8 @@ def render_beta_cask(
     sha256 "{intel_sha256}"
   end
 
-  name "Dockter Beta"
-  desc "Beta channel for Dockter"
+  name "Docktor Beta"
+  desc "Beta channel for Docktor"
   homepage "https://github.com/{repo}"
 
   livecheck do
@@ -280,10 +280,10 @@ def render_beta_cask(
     end
   end
 
-  app "Dockter Beta.app"
+  app "Docktor Beta.app"
 
   zap trash: [
-    "~/Library/Application Support/Dockter Beta",
+    "~/Library/Application Support/Docktor Beta",
     "~/Library/Caches/pzc.Dockter.beta",
     "~/Library/Preferences/pzc.Dockter.beta.plist",
     "~/Library/Saved Application State/pzc.Dockter.beta.savedState",
@@ -310,7 +310,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--repo",
-        default="apotenza92/dockter",
+        default="apotenza92/docktor",
         help="GitHub repository owner/name",
     )
     parser.add_argument(
@@ -349,8 +349,8 @@ def main() -> int:
     stable_changed = False
     if stable is not None:
         stable_version = version_string(stable.parsed)
-        stable_arm_name = f"Dockter-v{stable_version}-macos-arm64.zip"
-        stable_intel_name = f"Dockter-v{stable_version}-macos-x64.zip"
+        stable_arm_name = f"Docktor-v{stable_version}-macos-arm64.zip"
+        stable_intel_name = f"Docktor-v{stable_version}-macos-x64.zip"
         stable_arm_asset = find_asset(stable, stable_arm_name)
         stable_intel_asset = find_asset(stable, stable_intel_name)
         stable_arm_sha = sha256_for_asset(
@@ -360,7 +360,7 @@ def main() -> int:
             stable_intel_asset, github_token=args.github_token, cache=sha_cache
         )
         stable_changed = write_if_changed(
-            casks_dir / "dockter.rb",
+            casks_dir / "docktor.rb",
             render_stable_cask(
                 args.repo,
                 stable_version,
@@ -377,8 +377,8 @@ def main() -> int:
         print("Stable cask unchanged (no stable releases yet)")
 
     beta_version = version_string(beta_track.parsed)
-    beta_arm_name = f"Dockter-Beta-v{beta_version}-macos-arm64.zip"
-    beta_intel_name = f"Dockter-Beta-v{beta_version}-macos-x64.zip"
+    beta_arm_name = f"Docktor-Beta-v{beta_version}-macos-arm64.zip"
+    beta_intel_name = f"Docktor-Beta-v{beta_version}-macos-x64.zip"
     beta_arm_asset = find_asset(beta_track, beta_arm_name)
     beta_intel_asset = find_asset(beta_track, beta_intel_name)
     beta_arm_sha = sha256_for_asset(
@@ -388,7 +388,7 @@ def main() -> int:
         beta_intel_asset, github_token=args.github_token, cache=sha_cache
     )
     beta_changed = write_if_changed(
-        casks_dir / "dockter@beta.rb",
+        casks_dir / "docktor@beta.rb",
         render_beta_cask(
             args.repo,
             beta_version,

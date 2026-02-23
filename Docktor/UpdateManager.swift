@@ -91,7 +91,7 @@ final class UpdateManager: NSObject, ObservableObject, SPUUpdaterDelegate {
     }
 
     nonisolated func feedURLString(for updater: SPUUpdater) -> String? {
-        let base = "https://raw.githubusercontent.com/apotenza92/dockter/main/appcasts"
+        let base = "https://raw.githubusercontent.com/apotenza92/docktor/main/appcasts"
         let channel = Self.isBetaBuild ? "beta" : "stable"
         let arch = Self.architectureSuffix
         return "\(base)/\(channel)-\(arch).xml"

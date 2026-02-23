@@ -66,7 +66,7 @@ struct PreferencesView: View {
             Text("General")
                 .font(sectionTitleFont)
             checkboxRow("Show settings on startup", isOn: $preferences.showOnStartup)
-            checkboxRow("Start Dockter at login", isOn: $preferences.startAtLogin)
+            checkboxRow("Start Docktor at login", isOn: $preferences.startAtLogin)
             HStack(spacing: 12) {
                 Button("Check for Updates", action: updateManager.checkForUpdates)
                     .buttonStyle(.borderedProminent)
@@ -111,17 +111,17 @@ struct PreferencesView: View {
                 .accessibilityLabel("Permissions details")
                 .popover(isPresented: $showingPermissionsInfo, arrowEdge: .bottom) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Dockter needs these permissions to detect your Dock gestures and run the actions you configure.")
+                        Text("Docktor needs these permissions to detect your Dock gestures and run the actions you configure.")
                             .font(.subheadline)
                             .fixedSize(horizontal: false, vertical: true)
                         Text("Accessibility")
                             .font(.headline)
-                        Text("Lets Dockter identify Dock icons and trigger actions in other apps.")
+                        Text("Lets Docktor identify Dock icons and trigger actions in other apps.")
                             .font(.subheadline)
                             .fixedSize(horizontal: false, vertical: true)
                         Text("Input Monitoring")
                             .font(.headline)
-                        Text("Lets Dockter listen for global click and scroll gestures.")
+                        Text("Lets Docktor listen for global click and scroll gestures.")
                             .font(.subheadline)
                             .fixedSize(horizontal: false, vertical: true)
                     }

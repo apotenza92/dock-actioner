@@ -52,7 +52,7 @@ jobs:
             exit 1
           fi
 
-          PROJECT_VERSION="$(python3 -c 'import re, pathlib; text = pathlib.Path("Dockter.xcodeproj/project.pbxproj").read_text(encoding="utf-8"); m = re.search(r"MARKETING_VERSION = ([0-9]+\.[0-9]+\.[0-9]+);", text); print(m.group(1) if m else "")')"
+          PROJECT_VERSION="$(python3 -c 'import re, pathlib; text = pathlib.Path("Docktor.xcodeproj/project.pbxproj").read_text(encoding="utf-8"); m = re.search(r"MARKETING_VERSION = ([0-9]+\.[0-9]+\.[0-9]+);", text); print(m.group(1) if m else "")')"
 
           if [[ "$PROJECT_VERSION" != "$CORE_VERSION" ]]; then
             echo "::error::Tag core version ($CORE_VERSION) must match MARKETING_VERSION ($PROJECT_VERSION)."
@@ -83,32 +83,32 @@ jobs:
             arch: arm64
             xcode_arch: arm64
             channel: stable
-            product_name: Dockter
-            package_prefix: Dockter
+            product_name: Docktor
+            package_prefix: Docktor
             bundle_id: pzc.Dockter
             app_icon: AppIcon
           - runner: macos-15
             arch: x64
             xcode_arch: x86_64
             channel: stable
-            product_name: Dockter
-            package_prefix: Dockter
+            product_name: Docktor
+            package_prefix: Docktor
             bundle_id: pzc.Dockter
             app_icon: AppIcon
           - runner: macos-15
             arch: arm64
             xcode_arch: arm64
             channel: beta
-            product_name: Dockter Beta
-            package_prefix: Dockter-Beta
+            product_name: Docktor Beta
+            package_prefix: Docktor-Beta
             bundle_id: pzc.Dockter.beta
             app_icon: AppIconBeta
           - runner: macos-15
             arch: x64
             xcode_arch: x86_64
             channel: beta
-            product_name: Dockter Beta
-            package_prefix: Dockter-Beta
+            product_name: Docktor Beta
+            package_prefix: Docktor-Beta
             bundle_id: pzc.Dockter.beta
             app_icon: AppIconBeta
     runs-on: ${{ matrix.runner }}
@@ -129,8 +129,8 @@ jobs:
           test -n "$APPLE_SIGNING_CERTIFICATE_P12_BASE64"
           test -n "$APPLE_SIGNING_CERTIFICATE_PASSWORD"
 
-          CERT_PATH="$RUNNER_TEMP/dockactioner-signing.p12"
-          KEYCHAIN_PATH="$RUNNER_TEMP/dockactioner.keychain-db"
+          CERT_PATH="$RUNNER_TEMP/docktor-signing.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/docktor.keychain-db"
           KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
 
           python3 -c 'import base64, pathlib, sys; pathlib.Path(sys.argv[1]).write_bytes(base64.b64decode(sys.argv[2]))' "$CERT_PATH" "$APPLE_SIGNING_CERTIFICATE_P12_BASE64"
@@ -164,8 +164,8 @@ jobs:
           EXPORT_OPTIONS_PATH="$RUNNER_TEMP/export-options-${{ matrix.package_prefix }}-${{ matrix.arch }}.plist"
 
           xcodebuild \
-            -project Dockter.xcodeproj \
-            -scheme Dockter \
+            -project Docktor.xcodeproj \
+            -scheme Docktor \
             -configuration Release \
             -destination "generic/platform=macOS" \
             -archivePath "$ARCHIVE_PATH" \
@@ -418,7 +418,7 @@ jobs:
             echo "HOMEBREW_TAP_TOKEN not set; skipping tap update."
           fi
 
-      - name: Checkout Dockter
+      - name: Checkout Docktor
         if: ${{ steps.tap.outputs.enabled == 'true' }}
         uses: actions/checkout@v4
 
@@ -431,13 +431,13 @@ jobs:
           set -euo pipefail
           git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/apotenza92/homebrew-tap.git" /tmp/homebrew-tap
 
-      - name: Update Dockter casks
+      - name: Update Docktor casks
         if: ${{ steps.tap.outputs.enabled == 'true' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python3 scripts/release/update_homebrew_tap_casks.py --tap-path /tmp/homebrew-tap --repo apotenza92/dockter
+          python3 scripts/release/update_homebrew_tap_casks.py --tap-path /tmp/homebrew-tap --repo apotenza92/docktor
 
       - name: Commit and push tap updates
         if: ${{ steps.tap.outputs.enabled == 'true' }}
@@ -446,13 +446,13 @@ jobs:
           set -euo pipefail
           cd /tmp/homebrew-tap
 
-          if git diff --quiet -- Casks/dockter.rb Casks/dockter@beta.rb; then
+          if git diff --quiet -- Casks/docktor.rb Casks/docktor@beta.rb; then
             echo "No Homebrew cask changes to push."
             exit 0
           fi
 
-          git config user.name "dockactioner-release-bot"
+          git config user.name "docktor-release-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add Casks/dockter.rb Casks/dockter@beta.rb
-          git commit -m "Update Dockter casks from release metadata"
+          git add Casks/docktor.rb Casks/docktor@beta.rb
+          git commit -m "Update Docktor casks from release metadata"
           git push origin main

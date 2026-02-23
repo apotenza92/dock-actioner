@@ -1,6 +1,6 @@
 //
-//  DockterApp.swift
-//  Dockter
+//  DocktorApp.swift
+//  Docktor
 //
 //  Created by Alex on 27/12/2025.
 //
@@ -9,7 +9,7 @@ import SwiftUI
 import AppKit
 
 @main
-struct DockterApp: App {
+struct DocktorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     private let updateManager = UpdateManager.shared
 

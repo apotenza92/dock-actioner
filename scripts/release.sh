@@ -49,14 +49,14 @@ fi
 PROJECT_VERSION="$(python3 - <<'PY'
 import re
 from pathlib import Path
-text = Path('Dockter.xcodeproj/project.pbxproj').read_text(encoding='utf-8')
+text = Path('Docktor.xcodeproj/project.pbxproj').read_text(encoding='utf-8')
 match = re.search(r'MARKETING_VERSION = ([0-9]+\.[0-9]+\.[0-9]+);', text)
 print(match.group(1) if match else '')
 PY
 )"
 
 if [[ "$PROJECT_VERSION" != "$CORE_VERSION" ]]; then
-  echo "Error: Dockter MARKETING_VERSION ($PROJECT_VERSION) must match tag core version ($CORE_VERSION)"
+  echo "Error: Docktor MARKETING_VERSION ($PROJECT_VERSION) must match tag core version ($CORE_VERSION)"
   exit 1
 fi
 

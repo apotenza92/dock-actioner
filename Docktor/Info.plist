@@ -21,9 +21,9 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAccessibilityUsageDescription</key>
-	<string>Dockter needs Accessibility access to detect Dock gestures and manage app windows.</string>
+	<string>Docktor needs Accessibility access to detect Dock gestures and manage app windows.</string>
 	<key>SUFeedURL</key>
-	<string>https://raw.githubusercontent.com/apotenza92/dockter/main/appcasts/stable-arm64.xml</string>
+	<string>https://raw.githubusercontent.com/apotenza92/docktor/main/appcasts/stable-arm64.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>zM3fwyZrb6uCBvOIv8Smh91DRMyrKVQPbWBGpkCcgDI=</string>
 	<key>SUEnableAutomaticChecks</key>

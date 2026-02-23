@@ -148,7 +148,7 @@ def fetch_releases(repo: str, github_token: str | None) -> list[Release]:
     url = f"https://api.github.com/repos/{repo}/releases"
     headers = {
         "Accept": "application/vnd.github+json",
-        "User-Agent": "dockter-sparkle-appcast-sync",
+        "User-Agent": "docktor-sparkle-appcast-sync",
     }
     if github_token:
         headers["Authorization"] = f"Bearer {github_token}"
@@ -235,7 +235,7 @@ def download_asset(
 ) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
 
-    headers = {"User-Agent": "dockter-sparkle-signature-sync"}
+    headers = {"User-Agent": "docktor-sparkle-signature-sync"}
     download_url = asset.download_url
     if github_token and asset.api_url:
         # Private repositories require authenticated asset fetches via API URL.
@@ -290,8 +290,8 @@ def render_appcast(
     return f"""<?xml version=\"1.0\" encoding=\"utf-8\"?>
 <rss version=\"2.0\" xmlns:sparkle=\"http://www.andymatuschak.org/xml-namespaces/sparkle\">
   <channel>
-    <title>Dockter {channel_name} Updates</title>
-    <description>Dockter update feed ({channel_name.lower()} channel)</description>
+    <title>Docktor {channel_name} Updates</title>
+    <description>Docktor update feed ({channel_name.lower()} channel)</description>
     <language>en</language>
     <item>
       <title>Version {update_title}</title>
@@ -323,7 +323,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--repo",
-        default="apotenza92/dockter",
+        default="apotenza92/docktor",
         help="GitHub repository owner/name",
     )
     parser.add_argument(
@@ -397,18 +397,18 @@ def main() -> int:
     beta_version = short_version(beta_track.parsed)
 
     stable_arm_asset = find_asset(
-        stable, f"Dockter-v{stable_version}-macos-arm64.zip"
+        stable, f"Docktor-v{stable_version}-macos-arm64.zip"
     )
     stable_x64_asset = find_asset(
-        stable, f"Dockter-v{stable_version}-macos-x64.zip"
+        stable, f"Docktor-v{stable_version}-macos-x64.zip"
     )
     beta_arm_asset = find_asset(
         beta_track,
-        f"Dockter-Beta-v{beta_version}-macos-arm64.zip",
+        f"Docktor-Beta-v{beta_version}-macos-arm64.zip",
     )
     beta_x64_asset = find_asset(
         beta_track,
-        f"Dockter-Beta-v{beta_version}-macos-x64.zip",
+        f"Docktor-Beta-v{beta_version}-macos-x64.zip",
     )
 
     stable_notes = extract_notes(args.changelog, stable.tag_name)
@@ -417,7 +417,7 @@ def main() -> int:
     signatures: dict[str, str] = {}
     if private_key is not None:
         with tempfile.TemporaryDirectory(
-            prefix="dockactioner-sparkle-sign-"
+            prefix="docktor-sparkle-sign-"
         ) as temp_dir:
             cache_dir = Path(temp_dir)
             unique_assets = {

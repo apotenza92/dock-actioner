@@ -8,10 +8,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let coordinator = DockExposeCoordinator.shared
     private let preferences = Preferences.shared
     private let updateManager = UpdateManager.shared
-    private let settingsWindowIdentifier = NSUserInterfaceItemIdentifier("DockterSettingsWindow")
+    private let settingsWindowIdentifier = NSUserInterfaceItemIdentifier("DocktorSettingsWindow")
     private var fallbackPreferencesWindow: NSWindow?
-    private let legacyAppBundleName = "DockActioner.app"
-    private let currentAppBundleName = "Dockter.app"
+    private let legacyAppBundleNames = ["DockActioner.app", "Dockter.app"]
+    private let currentAppBundleName = "Docktor.app"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -55,7 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func migrateLegacyAppBundleNameIfNeeded() {
         let currentBundleURL = Bundle.main.bundleURL.standardizedFileURL
-        guard currentBundleURL.lastPathComponent == legacyAppBundleName else { return }
+        guard legacyAppBundleNames.contains(currentBundleURL.lastPathComponent) else { return }
 
         let destinationURL = currentBundleURL
             .deletingLastPathComponent()
@@ -71,9 +71,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         do {
             try fileManager.moveItem(at: currentBundleURL, to: destinationURL)
-            Logger.log("Renamed legacy app bundle from \(legacyAppBundleName) to \(currentAppBundleName)")
+            Logger.log("Renamed legacy app bundle from \(currentBundleURL.lastPathComponent) to \(currentAppBundleName)")
         } catch {
-            Logger.log("Legacy app rename failed from \(legacyAppBundleName) to \(currentAppBundleName): \(error.localizedDescription)")
+            Logger.log("Legacy app rename failed from \(currentBundleURL.lastPathComponent) to \(currentAppBundleName): \(error.localizedDescription)")
         }
     }
 
@@ -86,7 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = StatusBarIcon.image()
         item.button?.image?.isTemplate = true
-        item.button?.setAccessibilityLabel("Dockter")
+        item.button?.setAccessibilityLabel("Docktor")
         statusMenu.delegate = self
         item.menu = statusMenu
         rebuildStatusMenu()
@@ -108,7 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         statusMenu.addItem(.separator())
 
-        let quitItem = NSMenuItem(title: "Quit Dockter",
+        let quitItem = NSMenuItem(title: "Quit Docktor",
                                   action: #selector(quit),
                                   keyEquivalent: "q")
         quitItem.target = self
@@ -174,13 +174,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return fallbackPreferencesWindow
         }
         return NSApp.windows.first(where: {
-            $0.identifier == settingsWindowIdentifier || $0.title == "Dockter Settings" || $0.title == "Settings"
+            $0.identifier == settingsWindowIdentifier || $0.title == "Docktor Settings" || $0.title == "Settings"
         })
     }
 
     private func configurePreferencesWindow(_ window: NSWindow) {
         window.identifier = settingsWindowIdentifier
-        window.title = "Dockter Settings"
+        window.title = "Docktor Settings"
         window.titleVisibility = .visible
         window.titlebarAppearsTransparent = false
         window.isMovableByWindowBackground = false

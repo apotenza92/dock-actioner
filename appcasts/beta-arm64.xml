@@ -1,25 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
-    <title>Dockter Beta Updates</title>
-    <description>Dockter update feed (beta channel)</description>
+    <title>Docktor Beta Updates</title>
+    <description>Docktor update feed (beta channel)</description>
     <language>en</language>
     <item>
       <title>Version 0.0.9</title>
-      <link>https://github.com/apotenza92/dockter/releases/tag/v0.0.9</link>
+      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.9</link>
       <sparkle:version>990000</sparkle:version>
       <sparkle:shortVersionString>0.0.9</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-      <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/dockter/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
+      <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/docktor/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
       <description sparkle:format="plain-text"><![CDATA[- Fixed Single App Mode so switching apps hides only the app you are leaving, then shows/activates the app you click.
 - Extended the `>1 window only` App Expose preference to also apply to the "Click after App activation" App Expose path.
 - Fixed Brave vertical-tabs compatibility so sidebar/auxiliary panes are excluded from window counts used by first-click App Expose and `>1 window only`.
 - Improved first-click App Expose fallback behavior and tracing around mouse-down/up window-state decisions.
 - Simplified settings-window presentation to use the fallback preferences window path directly.
 - Simplified and refreshed README documentation, including the app icon and streamlined install/build/release guidance.
-- Updated CI workflow references from legacy `DockActioner` names to `Dockter` project/scheme/product identifiers.]]></description>
+- Updated CI workflow references from legacy `DockActioner` names to `Docktor` project/scheme/product identifiers.]]></description>
       <pubDate>Mon, 23 Feb 2026 03:31:34 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/dockter/releases/download/v0.0.9/Dockter-Beta-v0.0.9-macos-arm64.zip"
+      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.9/Docktor-Beta-v0.0.9-macos-arm64.zip"
                  sparkle:edSignature="LXKi8WwKpaiiYt/JEyjb4gQkGGKpU5hxb/PprGduuv6hzV/YjZKRbFR9Gw2//L82hBDlXtowS0GQLjfaqpNNDA=="
                  length="2622399"
                  type="application/octet-stream" />

@@ -11,26 +11,26 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		FA12B1922EFF98EC00DB8333 /* Dockter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Dockter.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FA12B1922EFF98EC00DB8333 /* Docktor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Docktor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		FA12B1CA2EFF9E7F00DB8333 /* Exceptions for "Dockter" folder in "Dockter" target */ = {
+		FA12B1CA2EFF9E7F00DB8333 /* Exceptions for "Docktor" folder in "Docktor" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = FA12B1912EFF98EC00DB8333 /* Dockter */;
+			target = FA12B1912EFF98EC00DB8333 /* Docktor */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		FA12B1942EFF98EC00DB8333 /* Dockter */ = {
+		FA12B1942EFF98EC00DB8333 /* Docktor */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				FA12B1CA2EFF9E7F00DB8333 /* Exceptions for "Dockter" folder in "Dockter" target */,
+				FA12B1CA2EFF9E7F00DB8333 /* Exceptions for "Docktor" folder in "Docktor" target */,
 			);
-			path = Dockter;
+			path = Docktor;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -50,7 +50,7 @@
 		FA12B1892EFF98EC00DB8333 = {
 			isa = PBXGroup;
 			children = (
-				FA12B1942EFF98EC00DB8333 /* Dockter */,
+				FA12B1942EFF98EC00DB8333 /* Docktor */,
 				FA12B1932EFF98EC00DB8333 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -58,7 +58,7 @@
 		FA12B1932EFF98EC00DB8333 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				FA12B1922EFF98EC00DB8333 /* Dockter.app */,
+				FA12B1922EFF98EC00DB8333 /* Docktor.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -66,9 +66,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		FA12B1912EFF98EC00DB8333 /* Dockter */ = {
+		FA12B1912EFF98EC00DB8333 /* Docktor */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = FA12B19D2EFF98ED00DB8333 /* Build configuration list for PBXNativeTarget "Dockter" */;
+			buildConfigurationList = FA12B19D2EFF98ED00DB8333 /* Build configuration list for PBXNativeTarget "Docktor" */;
 			buildPhases = (
 				FA12B18E2EFF98EC00DB8333 /* Sources */,
 				FA12B18F2EFF98EC00DB8333 /* Frameworks */,
@@ -79,14 +79,14 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				FA12B1942EFF98EC00DB8333 /* Dockter */,
+				FA12B1942EFF98EC00DB8333 /* Docktor */,
 			);
-			name = Dockter;
+			name = Docktor;
 			packageProductDependencies = (
 				FA12B1D72F00111100DB8333 /* Sparkle */,
 			);
-			productName = Dockter;
-			productReference = FA12B1922EFF98EC00DB8333 /* Dockter.app */;
+			productName = Docktor;
+			productReference = FA12B1922EFF98EC00DB8333 /* Docktor.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -104,7 +104,7 @@
 					};
 				};
 			};
-			buildConfigurationList = FA12B18D2EFF98EC00DB8333 /* Build configuration list for PBXProject "Dockter" */;
+			buildConfigurationList = FA12B18D2EFF98EC00DB8333 /* Build configuration list for PBXProject "Docktor" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -121,7 +121,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				FA12B1912EFF98EC00DB8333 /* Dockter */,
+				FA12B1912EFF98EC00DB8333 /* Docktor */,
 			);
 		};
 /* End PBXProject section */
@@ -278,14 +278,14 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Dockter/Info.plist;
+				INFOPLIST_FILE = Docktor/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 0.0.9;
+				MARKETING_VERSION = 0.0.10;
 				PRODUCT_BUNDLE_IDENTIFIER = pzc.Dockter;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -312,14 +312,14 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Dockter/Info.plist;
+				INFOPLIST_FILE = Docktor/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 0.0.9;
+				MARKETING_VERSION = 0.0.10;
 				PRODUCT_BUNDLE_IDENTIFIER = pzc.Dockter;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -335,7 +335,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		FA12B18D2EFF98EC00DB8333 /* Build configuration list for PBXProject "Dockter" */ = {
+		FA12B18D2EFF98EC00DB8333 /* Build configuration list for PBXProject "Docktor" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				FA12B19B2EFF98ED00DB8333 /* Debug */,
@@ -344,7 +344,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		FA12B19D2EFF98ED00DB8333 /* Build configuration list for PBXNativeTarget "Dockter" */ = {
+		FA12B19D2EFF98ED00DB8333 /* Build configuration list for PBXNativeTarget "Docktor" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				FA12B19E2EFF98ED00DB8333 /* Debug */,
