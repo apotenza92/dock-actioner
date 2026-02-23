@@ -10,9 +10,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let updateManager = UpdateManager.shared
     private let settingsWindowIdentifier = NSUserInterfaceItemIdentifier("DockterSettingsWindow")
     private var fallbackPreferencesWindow: NSWindow?
+    private let legacyAppBundleName = "DockActioner.app"
+    private let currentAppBundleName = "Dockter.app"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        migrateLegacyAppBundleNameIfNeeded()
         Logger.log("Launched bundle at \(Bundle.main.bundleURL.path), bundleId \(Bundle.main.bundleIdentifier ?? "nil"), pid \(ProcessInfo.processInfo.processIdentifier), LSUIElement \(Bundle.main.object(forInfoDictionaryKey: "LSUIElement") as? Bool ?? false)")
 
         terminateOtherInstances()
@@ -47,6 +50,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Logger.log("Terminating other running instances: \(others.map { $0.processIdentifier })")
         for app in others {
             _ = app.terminate()
+        }
+    }
+
+    private func migrateLegacyAppBundleNameIfNeeded() {
+        let currentBundleURL = Bundle.main.bundleURL.standardizedFileURL
+        guard currentBundleURL.lastPathComponent == legacyAppBundleName else { return }
+
+        let destinationURL = currentBundleURL
+            .deletingLastPathComponent()
+            .appendingPathComponent(currentAppBundleName, isDirectory: true)
+            .standardizedFileURL
+        guard destinationURL.path != currentBundleURL.path else { return }
+
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: destinationURL.path) {
+            Logger.log("Legacy app rename skipped: destination already exists at \(destinationURL.path)")
+            return
+        }
+
+        do {
+            try fileManager.moveItem(at: currentBundleURL, to: destinationURL)
+            Logger.log("Renamed legacy app bundle from \(legacyAppBundleName) to \(currentAppBundleName)")
+        } catch {
+            Logger.log("Legacy app rename failed from \(legacyAppBundleName) to \(currentAppBundleName): \(error.localizedDescription)")
         }
     }
 
