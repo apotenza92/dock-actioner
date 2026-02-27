@@ -12,6 +12,8 @@ struct DocktorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     init() {
+        // Keep native tooltip behavior, but reduce hover delay for usability.
+        UserDefaults.standard.set(250, forKey: "NSInitialToolTipDelay")
         AppDelegate.services = .live
     }
 

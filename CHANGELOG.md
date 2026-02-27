@@ -6,6 +6,13 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
+## [v0.0.20]
+
+- Reworked the top settings layout into three columns (`General`, `Updates`, `Permissions`) with updated control grouping and wording, including `Active App Click` in the mappings table header.
+- Switched permission info indicators to native macOS help tooltips on the `(i)` controls, with a larger hover target and faster tooltip reveal timing.
+- Improved settings-window behavior by centering first-open placement and persisting/restoring the window frame across launches/updates.
+- Added Debug-build guardrails for local testing: disable Sparkle update checks and force menu bar icon visibility/startup settings on.
+
 ## [v0.0.19]
 
 - Fixed synthetic Dock click recovery so it no longer posts mouse-up events at offscreen coordinates, preventing visible pointer jumps during actions like `Option+Click` Single App Mode.

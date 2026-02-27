@@ -33,6 +33,12 @@ final class UpdateManager: NSObject, ObservableObject, SPUUpdaterDelegate {
             return
         }
 
+        guard !Self.isDevelopmentBuild else {
+            Logger.log("UpdateManager disabled in development build")
+            canCheckForUpdates = false
+            return
+        }
+
         updaterController.startUpdater()
         bindUpdaterState()
         bindPreferences()
@@ -107,6 +113,14 @@ final class UpdateManager: NSObject, ObservableObject, SPUUpdaterDelegate {
         return "arm64"
         #else
         return "x64"
+        #endif
+    }
+
+    nonisolated private static var isDevelopmentBuild: Bool {
+        #if DEBUG
+        return true
+        #else
+        return false
         #endif
     }
 }

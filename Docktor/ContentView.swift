@@ -5,7 +5,6 @@ struct PreferencesView: View {
     @ObservedObject var coordinator: DockExposeCoordinator
     @ObservedObject var updateManager: UpdateManager
     @ObservedObject var preferences: Preferences
-    @State private var showingPermissionsInfo = false
 
     private enum MappingSource {
         case click
@@ -56,6 +55,9 @@ struct PreferencesView: View {
     private var topSection: some View {
         HStack(alignment: .top, spacing: 24) {
             appSettingsSection
+                .frame(width: 280, alignment: .topLeading)
+            updatesSection
+                .frame(width: 220, alignment: .topLeading)
             permissionsSection
                 .frame(width: 220, alignment: .topLeading)
         }
@@ -68,84 +70,56 @@ struct PreferencesView: View {
             checkboxRow("Show menu bar icon", isOn: $preferences.showMenuBarIcon)
             checkboxRow("Show settings on startup", isOn: $preferences.showOnStartup)
             checkboxRow("Start Docktor at login", isOn: $preferences.startAtLogin)
-            if !preferences.showMenuBarIcon {
-                Text("Tip: \"Show settings on startup\" is kept enabled while the menu bar icon is hidden.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
             HStack(spacing: 12) {
-                Button("Check for Updates", action: updateManager.checkForUpdates)
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!updateManager.canCheckForUpdates)
                 Button("Restart", action: restartApp)
                     .buttonStyle(.bordered)
                 Button("Quit", action: { NSApp.terminate(nil) })
                     .buttonStyle(.bordered)
+                Button("About", action: showAboutPanel)
+                    .buttonStyle(.bordered)
             }
-            updateFrequencyRow
         }
     }
 
-    private var updateFrequencyRow: some View {
-        HStack(spacing: 10) {
-            Text("Check for updates:")
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-            Picker("", selection: $preferences.updateCheckFrequency) {
-                ForEach(UpdateCheckFrequency.allCases) { frequency in
-                    Text(frequency.displayName).tag(frequency)
+    private var updatesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Updates")
+                .font(sectionTitleFont)
+            Button("Check for Updates", action: updateManager.checkForUpdates)
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(!updateManager.canCheckForUpdates)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Check frequency:")
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                Picker("", selection: $preferences.updateCheckFrequency) {
+                    ForEach(UpdateCheckFrequency.allCases) { frequency in
+                        Text(frequency.displayName).tag(frequency)
+                    }
                 }
+                .labelsHidden()
+                .frame(width: 170, alignment: .leading)
             }
-            .labelsHidden()
-            .frame(width: 170)
         }
     }
 
     private var permissionsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 6) {
-                Text("Permissions")
-                    .font(sectionTitleFont)
-                Button {
-                    showingPermissionsInfo = true
-                } label: {
-                    Image(systemName: "info.circle")
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Permissions details")
-                .popover(isPresented: $showingPermissionsInfo, arrowEdge: .bottom) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Docktor needs these permissions to detect your Dock gestures and run the actions you configure.")
-                            .font(.subheadline)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text("Accessibility")
-                            .font(.headline)
-                        Text("Lets Docktor identify Dock icons and trigger actions in other apps.")
-                            .font(.subheadline)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text("Input Monitoring")
-                            .font(.headline)
-                        Text("Lets Docktor listen for global click and scroll gestures.")
-                            .font(.subheadline)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(12)
-                    .frame(width: 320, alignment: .leading)
-                }
-            }
+            Text("Permissions")
+                .font(sectionTitleFont)
 
             VStack(alignment: .leading, spacing: 8) {
                 permissionActionButton(
                     title: "Accessibility",
                     granted: coordinator.accessibilityGranted,
+                    infoText: "Allows Docktor to identify Dock icons and trigger actions.",
                     action: openAccessibilitySettings
                 )
                 permissionActionButton(
                     title: "Input Monitoring",
                     granted: coordinator.inputMonitoringGranted,
+                    infoText: "Allows Docktor to listen for global click and scroll gestures.",
                     action: openInputMonitoringSettings
                 )
             }
@@ -167,17 +141,8 @@ struct PreferencesView: View {
     }
 
     private func checkboxRow(_ title: String, isOn: Binding<Bool>) -> some View {
-        HStack(spacing: 9) {
-            Toggle("", isOn: isOn)
-                .labelsHidden()
-                .toggleStyle(.checkbox)
-            Button {
-                isOn.wrappedValue.toggle()
-            } label: {
-                Text(title)
-            }
-            .buttonStyle(.plain)
-        }
+        Toggle(title, isOn: isOn)
+            .toggleStyle(.checkbox)
     }
 
     private var actionMappingTable: some View {
@@ -204,7 +169,7 @@ struct PreferencesView: View {
             verticalDivider
             tableHeaderText("First Click", width: firstClickColumnWidth)
             verticalDivider
-            tableHeaderText("Active App", width: actionColumnWidth)
+            tableHeaderText("Active App Click", width: actionColumnWidth)
             verticalDivider
             tableHeaderText("Scroll Up", width: actionColumnWidth)
             verticalDivider
@@ -402,10 +367,20 @@ struct PreferencesView: View {
 
     private func permissionActionButton(title: String,
                                         granted: Bool,
+                                        infoText: String,
                                         action: @escaping () -> Void) -> some View {
         HStack(alignment: .center, spacing: 8) {
             Button(title, action: action)
                 .buttonStyle(.bordered)
+            Button(action: {}) {
+                Image(systemName: "info.circle")
+                    .foregroundColor(.secondary)
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .help(infoText)
             Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.circle")
                 .foregroundColor(granted ? .green : .orange)
                 .frame(width: 14)
@@ -443,5 +418,10 @@ struct PreferencesView: View {
             Logger.log("Failed to relaunch app: \(error.localizedDescription)")
             return
         }
+    }
+
+    private func showAboutPanel() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(nil)
     }
 }

@@ -10,7 +10,11 @@ final class MenuBarController: NSObject {
     private var cancellables = Set<AnyCancellable>()
 
     init(preferences: Preferences, appDelegate: AppDelegate) {
+        #if DEBUG
+        self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        #else
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        #endif
         self.preferences = preferences
         self.appDelegate = appDelegate
         super.init()
@@ -60,8 +64,13 @@ final class MenuBarController: NSObject {
     }
 
     private func applyVisibility(_ visible: Bool) {
-        statusItem.menu = visible ? menu : nil
-        statusItem.isVisible = visible
+        #if DEBUG
+        let shouldShow = true
+        #else
+        let shouldShow = visible
+        #endif
+        statusItem.menu = shouldShow ? menu : nil
+        statusItem.isVisible = shouldShow
     }
 
     @objc
