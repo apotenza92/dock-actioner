@@ -5,20 +5,17 @@
     <description>Docktor update feed (beta channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.0.18</title>
-      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.18</link>
-      <sparkle:version>1890000</sparkle:version>
-      <sparkle:shortVersionString>0.0.18</sparkle:shortVersionString>
+      <title>Version 0.0.19</title>
+      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.19</link>
+      <sparkle:version>1990000</sparkle:version>
+      <sparkle:shortVersionString>0.0.19</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/docktor/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Replaced SwiftUI `MenuBarExtra` settings routing with an AppKit `NSStatusItem` menu controller to eliminate status-menu reentrancy issues.
-- Replaced responder-chain settings opening (`showSettingsWindow:` / `showPreferencesWindow:`) with a dedicated AppKit `NSWindowController` hosting the existing SwiftUI preferences view.
-- Fixed a severe post-click CPU runaway (up to 100%) triggered by opening `Settings…` from the menu bar icon on some machines.
-- Validated with real pointer clicks (`cliclick`) in repeated menu open flows, including 30-iteration open/click-inside-controls/close stress with no crashes and no high-CPU runaway.]]></description>
-      <pubDate>Fri, 27 Feb 2026 13:06:02 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.18/Docktor-Beta-v0.0.18-macos-arm64.zip"
-                 sparkle:edSignature="4uz8svqulzUUgk0QC7RD8uPDMeS11TT46NCK0ocbOKM4Csk3/92BNL7Q6Lmesp0h7m2MMQNBvpuhWRinIrFQDQ=="
-                 length="2635867"
+      <description sparkle:format="plain-text"><![CDATA[- Fixed synthetic Dock click recovery so it no longer posts mouse-up events at offscreen coordinates, preventing visible pointer jumps during actions like `Option+Click` Single App Mode.]]></description>
+      <pubDate>Fri, 27 Feb 2026 13:20:28 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.19/Docktor-Beta-v0.0.19-macos-arm64.zip"
+                 sparkle:edSignature="4M8HYsxaAhuXL5H3JAJ6WB8bf9bzdBwO5gTndGjal8mxin+lNvuaTQ3c6kqJ1PY5oVJUeGhVwcIMUQ7z0WnEDw=="
+                 length="2635080"
                  type="application/octet-stream" />
     </item>
   </channel>
