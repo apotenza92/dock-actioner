@@ -120,6 +120,7 @@ final class Preferences: ObservableObject {
     private let firstClickOptionActionKey = "firstClickOptionAction"
     private let firstClickShiftOptionActionKey = "firstClickShiftOptionAction"
     private let firstClickAppExposeRequiresMultipleWindowsKey = "firstClickAppExposeRequiresMultipleWindows"
+    private let clickAppExposeRequiresMultipleWindowsKey = "clickAppExposeRequiresMultipleWindows"
     private let firstClickModifierActionsMigratedKey = "firstClickModifierActionsMigrated_v6"
 
     // Prevent feedback loop when we adjust login item after a failed toggle.
@@ -140,6 +141,12 @@ final class Preferences: ObservableObject {
     @Published var firstClickAppExposeRequiresMultipleWindows: Bool {
         didSet {
             userDefaults.set(firstClickAppExposeRequiresMultipleWindows, forKey: firstClickAppExposeRequiresMultipleWindowsKey)
+        }
+    }
+
+    @Published var clickAppExposeRequiresMultipleWindows: Bool {
+        didSet {
+            userDefaults.set(clickAppExposeRequiresMultipleWindows, forKey: clickAppExposeRequiresMultipleWindowsKey)
         }
     }
 
@@ -447,11 +454,13 @@ final class Preferences: ObservableObject {
         }
 
         let firstClickAppExposeRequiresMultipleWindows = userDefaults.object(forKey: firstClickAppExposeRequiresMultipleWindowsKey) as? Bool ?? true
+        let clickAppExposeRequiresMultipleWindows = userDefaults.object(forKey: clickAppExposeRequiresMultipleWindowsKey) as? Bool ?? true
 
         // Assign stored properties last
         self.clickAction = clickAction
         self.firstClickBehavior = firstClickBehavior
         self.firstClickAppExposeRequiresMultipleWindows = firstClickAppExposeRequiresMultipleWindows
+        self.clickAppExposeRequiresMultipleWindows = clickAppExposeRequiresMultipleWindows
         self.firstClickShiftAction = firstClickShiftAction
         self.firstClickOptionAction = firstClickOptionAction
         self.firstClickShiftOptionAction = firstClickShiftOptionAction
@@ -486,6 +495,7 @@ final class Preferences: ObservableObject {
         clickAction = .appExpose
         firstClickBehavior = .appExpose
         firstClickAppExposeRequiresMultipleWindows = true
+        clickAppExposeRequiresMultipleWindows = true
 
         firstClickShiftAction = .bringAllToFront
         firstClickOptionAction = .singleAppMode

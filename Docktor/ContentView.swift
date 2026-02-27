@@ -197,7 +197,7 @@ struct PreferencesView: View {
             verticalDivider
             tableHeaderText("First Click", width: firstClickColumnWidth)
             verticalDivider
-            tableHeaderText("Click after App activation", width: actionColumnWidth)
+            tableHeaderText("Active App", width: actionColumnWidth)
             verticalDivider
             tableHeaderText("Scroll Up", width: actionColumnWidth)
             verticalDivider
@@ -217,7 +217,7 @@ struct PreferencesView: View {
             verticalDivider
             firstClickCell(for: modifier, width: firstClickColumnWidth)
             verticalDivider
-            tablePickerCell(selection: mappingBinding(source: MappingSource.click, modifier: modifier), width: actionColumnWidth)
+            clickAfterActivationCell(for: modifier, width: actionColumnWidth)
             verticalDivider
             tablePickerCell(selection: mappingBinding(source: MappingSource.scrollUp, modifier: modifier), width: actionColumnWidth)
             verticalDivider
@@ -282,14 +282,19 @@ struct PreferencesView: View {
                     .controlSize(.regular)
                     .frame(width: width - 20, alignment: .leading)
 
-                    if shouldShowAppExposeMultipleWindowsToggle {
-                        Toggle(">1 window only", isOn: $preferences.firstClickAppExposeRequiresMultipleWindows)
-                            .toggleStyle(.checkbox)
-                            .font(.system(size: 12))
+                    if shouldShowFirstClickAppExposeMultipleWindowsToggle {
+                        HStack(spacing: 0) {
+                            Spacer(minLength: 0)
+                            Toggle(">1 window only", isOn: $preferences.firstClickAppExposeRequiresMultipleWindows)
+                                .toggleStyle(.checkbox)
+                                .font(.system(size: 12))
+                                .fixedSize()
+                            Spacer(minLength: 0)
+                        }
                     }
                 }
                 .padding(.horizontal, 10)
-                .padding(.vertical, shouldShowAppExposeMultipleWindowsToggle ? 6 : 0)
+                .padding(.vertical, shouldShowFirstClickAppExposeMultipleWindowsToggle ? 6 : 0)
             } else {
                 tablePickerCell(selection: firstClickActionBinding(for: modifier), width: width)
             }
@@ -297,15 +302,53 @@ struct PreferencesView: View {
         .frame(width: width, alignment: .leading)
     }
 
+    private func clickAfterActivationCell(for modifier: MappingModifier, width: CGFloat) -> some View {
+        Group {
+            if modifier == .none {
+                VStack(alignment: .leading, spacing: 6) {
+                    Picker("", selection: mappingBinding(source: MappingSource.click, modifier: modifier)) {
+                        ForEach(DockAction.allCases, id: \.self) { action in
+                            Text(action.displayName).tag(action)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .controlSize(.regular)
+                    .frame(width: width - 20, alignment: .leading)
+
+                    if shouldShowClickAppExposeMultipleWindowsToggle {
+                        HStack(spacing: 0) {
+                            Spacer(minLength: 0)
+                            Toggle(">1 window only", isOn: $preferences.clickAppExposeRequiresMultipleWindows)
+                                .toggleStyle(.checkbox)
+                                .font(.system(size: 12))
+                                .fixedSize()
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, shouldShowClickAppExposeMultipleWindowsToggle ? 6 : 0)
+            } else {
+                tablePickerCell(selection: mappingBinding(source: MappingSource.click, modifier: modifier), width: width)
+            }
+        }
+        .frame(width: width, alignment: .leading)
+    }
+
     private func rowHeight(for modifier: MappingModifier) -> CGFloat {
-        if modifier == .none && shouldShowAppExposeMultipleWindowsToggle {
+        if modifier == .none && (shouldShowFirstClickAppExposeMultipleWindowsToggle || shouldShowClickAppExposeMultipleWindowsToggle) {
             return expandedFirstClickRowHeight
         }
         return rowHeight
     }
 
-    private var shouldShowAppExposeMultipleWindowsToggle: Bool {
-        preferences.firstClickBehavior == .appExpose || preferences.clickAction == .appExpose
+    private var shouldShowFirstClickAppExposeMultipleWindowsToggle: Bool {
+        preferences.firstClickBehavior == .appExpose
+    }
+
+    private var shouldShowClickAppExposeMultipleWindowsToggle: Bool {
+        preferences.clickAction == .appExpose
     }
 
     private func firstClickActionBinding(for modifier: MappingModifier) -> Binding<DockAction> {

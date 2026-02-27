@@ -6,6 +6,12 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
+## [v0.0.12]
+
+- Split App Expose gating into two independent `>1 window only` settings: one for `First Click` and one for `Active App` (click-after-activation).
+- Updated the mappings table UI to surface and center the separate toggles only when each corresponding action is set to `App Expose`.
+- Updated README defaults/behavior notes to reflect independent App Expose gating controls.
+
 ## [v0.0.11]
 
 - Reduced accidental scroll double-toggles by adding a cooldown guard for toggle-style scroll actions (`Hide App`, `Hide Others`, and `Single App Mode`).

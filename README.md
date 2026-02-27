@@ -10,7 +10,7 @@ Docktor is a lightweight macOS menu bar app that lets you run actions by clickin
 - Click after app activation: `App Expose`
 - Scroll up: `Hide Others`
 - Scroll down: `Hide App`
-- Optional: `>1 window only` can gate App Expose for both first-click and click-after-activation flows
+- Optional: independent `>1 window only` toggles can gate App Expose for first-click and Active App flows
 
 ## Install
 
