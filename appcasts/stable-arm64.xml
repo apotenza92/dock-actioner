@@ -5,19 +5,20 @@
     <description>Docktor update feed (stable channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.0.17</title>
-      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.17</link>
-      <sparkle:version>1790000</sparkle:version>
-      <sparkle:shortVersionString>0.0.17</sparkle:shortVersionString>
+      <title>Version 0.0.18</title>
+      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.18</link>
+      <sparkle:version>1890000</sparkle:version>
+      <sparkle:shortVersionString>0.0.18</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/docktor/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Fixed a settings-open crash in the SwiftUI menu flow by removing a recursive `showSettingsWindow:` bridge path in `AppDelegate`.
-- Kept settings routing on system actions only (`showSettingsWindow:` / `showPreferencesWindow:`), avoiding self-targeted responder recursion.
-- Re-validated settings stability for launch-argument open, URL open, repeated `Cmd+,`, and status-menu `Settings…` clicks.]]></description>
-      <pubDate>Fri, 27 Feb 2026 12:09:32 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.17/Docktor-v0.0.17-macos-arm64.zip"
-                 sparkle:edSignature="ro1XeG5SNbtjDhUaaany1zsuaL8faOg2N2hoj5izJ6ROQn+IHIAaov01TYS8UDaMmJK+73AWl5/177t92uWNAg=="
-                 length="4413170"
+      <description sparkle:format="plain-text"><![CDATA[- Replaced SwiftUI `MenuBarExtra` settings routing with an AppKit `NSStatusItem` menu controller to eliminate status-menu reentrancy issues.
+- Replaced responder-chain settings opening (`showSettingsWindow:` / `showPreferencesWindow:`) with a dedicated AppKit `NSWindowController` hosting the existing SwiftUI preferences view.
+- Fixed a severe post-click CPU runaway (up to 100%) triggered by opening `Settings…` from the menu bar icon on some machines.
+- Validated with real pointer clicks (`cliclick`) in repeated menu open flows, including 30-iteration open/click-inside-controls/close stress with no crashes and no high-CPU runaway.]]></description>
+      <pubDate>Fri, 27 Feb 2026 13:06:02 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.18/Docktor-v0.0.18-macos-arm64.zip"
+                 sparkle:edSignature="1xVLby3zCzvwmqQHcimbqB/7tSqXtAc9puYpKGFAKBpLfSbo17HN3ieeZw9yYEvJAoQfRAh56gMdxplZiZ8pCQ=="
+                 length="4413818"
                  type="application/octet-stream" />
     </item>
   </channel>
