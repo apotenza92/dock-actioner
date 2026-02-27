@@ -24,8 +24,8 @@ struct DocktorApp: App {
 
     var body: some Scene {
         MenuBarExtra(isInserted: $preferences.showMenuBarIcon) {
-            Button("Settings…") {
-                appDelegate.showSettingsWindow()
+            SettingsLink {
+                Text("Settings…")
             }
             .keyboardShortcut(",")
 

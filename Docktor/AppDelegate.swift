@@ -1,5 +1,4 @@
 import AppKit
-import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -8,8 +7,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var coordinator: DockExposeCoordinator { Self.services.coordinator }
     private var preferences: Preferences { Self.services.preferences }
     private var updateManager: UpdateManager { Self.services.updateManager }
-    private let settingsWindowIdentifier = NSUserInterfaceItemIdentifier("DocktorSettingsWindow")
-    private var fallbackSettingsWindow: NSWindow?
     private let legacyAppBundleNames = ["DockActioner.app", "Dockter.app"]
     private let currentAppBundleName = "Docktor.app"
     private let openSettingsLaunchArguments: Set<String> = ["--settings", "-settings", "--open-settings"]
@@ -130,78 +127,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    @objc func showSettingsWindow(_ sender: Any?) {
+        showSettingsWindow()
+    }
+
     func showSettingsWindow() {
         Logger.log("Opening settings window")
         NSApp.activate(ignoringOtherApps: true)
 
-        if let window = currentSettingsWindow {
-            configureSettingsWindow(window)
-            window.makeKeyAndOrderFront(nil)
+        let openedViaSettings = NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        if openedViaSettings {
             return
         }
 
-        showFallbackSettingsWindow()
+        let openedViaPreferences = NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+        if openedViaPreferences {
+            return
+        }
+
+        Logger.log("Unable to route to system settings window action")
     }
 
     private func hideSettingsWindow() {
-        currentSettingsWindow?.orderOut(nil)
-        fallbackSettingsWindow?.orderOut(nil)
-    }
-
-    private var currentSettingsWindow: NSWindow? {
-        if let fallbackSettingsWindow {
-            return fallbackSettingsWindow
-        }
-
-        return NSApp.windows.first(where: {
-            $0.identifier == settingsWindowIdentifier || $0.title == "Docktor Settings" || $0.title == "Settings"
-        })
-    }
-
-    private func configureSettingsWindow(_ window: NSWindow) {
-        window.identifier = settingsWindowIdentifier
-        window.title = "Docktor Settings"
-        window.titleVisibility = .visible
-        window.titlebarAppearsTransparent = false
-        window.isMovableByWindowBackground = false
-        sizeSettingsWindowToContent(window)
-        window.center()
-    }
-
-    private func sizeSettingsWindowToContent(_ window: NSWindow) {
-        guard let contentView = window.contentView else { return }
-        contentView.layoutSubtreeIfNeeded()
-        let fittingSize = contentView.fittingSize
-        guard fittingSize.width > 0, fittingSize.height > 0 else { return }
-        window.setContentSize(fittingSize)
-    }
-
-    private func showFallbackSettingsWindow() {
-        if let window = fallbackSettingsWindow {
-            configureSettingsWindow(window)
-            window.makeKeyAndOrderFront(nil)
-            return
-        }
-
-        Logger.log("Creating fallback settings window")
-
-        let rootView = PreferencesView(coordinator: coordinator,
-                                       updateManager: updateManager,
-                                       preferences: preferences)
-        let hostingView = NSHostingView(rootView: rootView)
-        hostingView.layoutSubtreeIfNeeded()
-        let fittingSize = hostingView.fittingSize
-
-        let window = NSWindow(
-            contentRect: NSRect(origin: .zero,
-                                size: NSSize(width: max(fittingSize.width, 1), height: max(fittingSize.height, 1))),
-            styleMask: [.titled, .closable, .miniaturizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.contentView = hostingView
-        configureSettingsWindow(window)
-        fallbackSettingsWindow = window
-        window.makeKeyAndOrderFront(nil)
+        NSApp.windows
+            .filter { $0.title == "Settings" || $0.title == "Docktor Settings" }
+            .forEach { $0.orderOut(nil) }
     }
 }

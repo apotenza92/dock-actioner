@@ -6,6 +6,13 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
+## [v0.0.16]
+
+- Switched menu-bar settings action to SwiftUI `SettingsLink` on macOS 14+.
+- Removed custom fallback settings window presentation and routed settings opening through system settings actions only.
+- Bumped deployment target to macOS 14.0 to support the native SwiftUI settings-link flow.
+- Verified settings stability with repeated open checks (`Cmd+,`) and settings shell automation.
+
 ## [v0.0.15]
 
 - Reworked the menu-bar shell to SwiftUI `MenuBarExtra` and standardized wording to `Settings…`.
