@@ -6,6 +6,12 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
+## [v0.0.17]
+
+- Fixed a settings-open crash in the SwiftUI menu flow by removing a recursive `showSettingsWindow:` bridge path in `AppDelegate`.
+- Kept settings routing on system actions only (`showSettingsWindow:` / `showPreferencesWindow:`), avoiding self-targeted responder recursion.
+- Re-validated settings stability for launch-argument open, URL open, repeated `Cmd+,`, and status-menu `Settings…` clicks.
+
 ## [v0.0.16]
 
 - Switched menu-bar settings action to SwiftUI `SettingsLink` on macOS 14+.

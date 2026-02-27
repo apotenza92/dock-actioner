@@ -127,10 +127,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    @objc func showSettingsWindow(_ sender: Any?) {
-        showSettingsWindow()
-    }
-
     func showSettingsWindow() {
         Logger.log("Opening settings window")
         NSApp.activate(ignoringOtherApps: true)
