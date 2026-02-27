@@ -5,20 +5,17 @@
     <description>Docktor update feed (beta channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.0.13</title>
-      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.13</link>
-      <sparkle:version>1390000</sparkle:version>
-      <sparkle:shortVersionString>0.0.13</sparkle:shortVersionString>
+      <title>Version 0.0.14</title>
+      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.14</link>
+      <sparkle:version>1490000</sparkle:version>
+      <sparkle:shortVersionString>0.0.14</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/docktor/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Fixed status-bar `Preferences…` action routing to use the standard Settings responder path, preventing crashes when opening settings from the menu bar icon.
-- Improved Dock click target reliability by re-resolving the Dock icon bundle on mouse-up before executing actions.
-- Hardened `Hide App` execution with post-hide verification and fallback paths, fixing intermittent active-app hide behavior.
-- Reduced App Exposé state false-positives and removed swallowed-click/third-click no-op regressions in repeated Dock interactions.]]></description>
-      <pubDate>Fri, 27 Feb 2026 08:36:38 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.13/Docktor-Beta-v0.0.13-macos-arm64.zip"
-                 sparkle:edSignature="CLtSjwwQsiva0ksUke3ERVfswXDXnnM/H875LZZ7hfOQv70HKHNtI9XS+cBFndVen1U6c/uWuWuICwFOkHUnAw=="
-                 length="2630988"
+      <description sparkle:format="plain-text"><![CDATA[- Fixed menu-bar `Preferences…` opening reliability by using a resilient multi-path action handler (`showSettingsWindow:` -> `showPreferencesWindow:` -> in-app fallback window).]]></description>
+      <pubDate>Fri, 27 Feb 2026 08:47:44 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.14/Docktor-Beta-v0.0.14-macos-arm64.zip"
+                 sparkle:edSignature="NLTIRVQDcK7GZ8NOfc5Xnz1u9pYCKAyGWTU2AmLTgvGLCZG8b94RUZ6aaD70W/onDtkIxcHOMdkGumsM83YEDQ=="
+                 length="2632509"
                  type="application/octet-stream" />
     </item>
   </channel>
