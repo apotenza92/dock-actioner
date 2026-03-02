@@ -5,20 +5,19 @@
     <description>Docktor update feed (stable channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.0.20</title>
-      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.20</link>
-      <sparkle:version>2090000</sparkle:version>
-      <sparkle:shortVersionString>0.0.20</sparkle:shortVersionString>
+      <title>Version 0.0.21</title>
+      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.21</link>
+      <sparkle:version>2190000</sparkle:version>
+      <sparkle:shortVersionString>0.0.21</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/docktor/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Reworked the top settings layout into three columns (`General`, `Updates`, `Permissions`) with updated control grouping and wording, including `Active App Click` in the mappings table header.
-- Switched permission info indicators to native macOS help tooltips on the `(i)` controls, with a larger hover target and faster tooltip reveal timing.
-- Improved settings-window behavior by centering first-open placement and persisting/restoring the window frame across launches/updates.
-- Added Debug-build guardrails for local testing: disable Sparkle update checks and force menu bar icon visibility/startup settings on.]]></description>
-      <pubDate>Fri, 27 Feb 2026 14:47:11 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.20/Docktor-v0.0.20-macos-arm64.zip"
-                 sparkle:edSignature="+X91G5hAOZ0voz59EJoh+pkURj99Kgp8Gs4H0qk6adRD/wOwMheckwxaTgF+SReELJDqhnfMF18U+GD1ir5ZCg=="
-                 length="4410146"
+      <description sparkle:format="plain-text"><![CDATA[- Fixed Allen-reported Dock regression cases: wrong-target/finicky `Hide App` behavior and swallowed third click during repeated App Exposé clicks.
+- Added per-slot `>1 window only` App Exposé gating for modifier rows and scroll mappings, with matching settings UI toggles and preference persistence.
+- Hardened App Exposé click-path state handling when the clicked app is already active while Exposé tracking is in progress.]]></description>
+      <pubDate>Mon, 02 Mar 2026 04:20:10 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.21/Docktor-v0.0.21-macos-arm64.zip"
+                 sparkle:edSignature="+hx9lD/HAQASOi2tNfnG6lL/2vMYUBGLSSx8wMmscv2oxd1CqMt115P0DSWhscMY4et4JrJ4gJcMix+W1Eg5Bw=="
+                 length="4414490"
                  type="application/octet-stream" />
     </item>
   </channel>
