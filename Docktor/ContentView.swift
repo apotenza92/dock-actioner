@@ -10,6 +10,17 @@ struct PreferencesView: View {
         case click
         case scrollUp
         case scrollDown
+
+        var appExposeSlotSource: AppExposeSlotSource {
+            switch self {
+            case .click:
+                return .click
+            case .scrollUp:
+                return .scrollUp
+            case .scrollDown:
+                return .scrollDown
+            }
+        }
     }
 
     private enum MappingModifier: CaseIterable {
@@ -28,6 +39,19 @@ struct PreferencesView: View {
                 return "⌥ Option"
             case .shiftOption:
                 return "⇧ Shift + ⌥ Option"
+            }
+        }
+
+        var appExposeSlotModifier: AppExposeSlotModifier {
+            switch self {
+            case .none:
+                return .none
+            case .shift:
+                return .shift
+            case .option:
+                return .option
+            case .shiftOption:
+                return .shiftOption
             }
         }
     }
@@ -129,6 +153,10 @@ struct PreferencesView: View {
     private var actionsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             actionMappingTable
+            Text(scrollDirectionHintText)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .frame(width: tableWidth, alignment: .leading)
             HStack {
                 Spacer()
                 Button("Reset mappings to defaults") {
@@ -138,6 +166,17 @@ struct PreferencesView: View {
             }
             .frame(width: tableWidth, alignment: .trailing)
         }
+    }
+
+    private var naturalScrollingEnabled: Bool {
+        (UserDefaults.standard
+            .persistentDomain(forName: UserDefaults.globalDomain)?["com.apple.swipescrolldirection"] as? Bool)
+        ?? true
+    }
+
+    private var scrollDirectionHintText: String {
+        let mode = naturalScrollingEnabled ? "Natural" : "Standard"
+        return "Scroll Up/Down follows macOS \(mode) scrolling direction."
     }
 
     private func checkboxRow(_ title: String, isOn: Binding<Bool>) -> some View {
@@ -191,9 +230,13 @@ struct PreferencesView: View {
             verticalDivider
             clickAfterActivationCell(for: modifier, width: actionColumnWidth)
             verticalDivider
-            tablePickerCell(selection: mappingBinding(source: MappingSource.scrollUp, modifier: modifier), width: actionColumnWidth)
+            tablePickerCell(selection: mappingBinding(source: .scrollUp, modifier: modifier),
+                            width: actionColumnWidth,
+                            appExposeToggle: appExposeToggleBinding(source: .scrollUp, modifier: modifier))
             verticalDivider
-            tablePickerCell(selection: mappingBinding(source: MappingSource.scrollDown, modifier: modifier), width: actionColumnWidth)
+            tablePickerCell(selection: mappingBinding(source: .scrollDown, modifier: modifier),
+                            width: actionColumnWidth,
+                            appExposeToggle: appExposeToggleBinding(source: .scrollDown, modifier: modifier))
         }
         .overlay(alignment: .bottom) {
             if !isLast {
@@ -226,17 +269,34 @@ struct PreferencesView: View {
             .frame(width: width, alignment: .leading)
     }
 
-    private func tablePickerCell(selection: Binding<DockAction>, width: CGFloat) -> some View {
-        Picker("", selection: selection) {
-            ForEach(DockAction.allCases, id: \.self) { action in
-                Text(action.displayName).tag(action)
+    private func tablePickerCell(selection: Binding<DockAction>,
+                                 width: CGFloat,
+                                 appExposeToggle: Binding<Bool>? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Picker("", selection: selection) {
+                ForEach(DockAction.allCases, id: \.self) { action in
+                    Text(action.displayName).tag(action)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .controlSize(.regular)
+            .frame(width: width - 20, alignment: .leading)
+
+            if selection.wrappedValue == .appExpose,
+               let appExposeToggle {
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    Toggle(">1 window only", isOn: appExposeToggle)
+                        .toggleStyle(.checkbox)
+                        .font(.system(size: 12))
+                        .fixedSize()
+                    Spacer(minLength: 0)
+                }
             }
         }
-        .labelsHidden()
-        .pickerStyle(.menu)
-        .controlSize(.regular)
-        .frame(width: width - 20, alignment: .leading)
         .padding(.horizontal, 10)
+        .padding(.vertical, selection.wrappedValue == .appExpose && appExposeToggle != nil ? 6 : 0)
         .frame(width: width, alignment: .leading)
     }
 
@@ -268,59 +328,66 @@ struct PreferencesView: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, shouldShowFirstClickAppExposeMultipleWindowsToggle ? 6 : 0)
             } else {
-                tablePickerCell(selection: firstClickActionBinding(for: modifier), width: width)
+                tablePickerCell(selection: firstClickActionBinding(for: modifier),
+                                width: width,
+                                appExposeToggle: firstClickAppExposeToggleBinding(for: modifier))
             }
         }
         .frame(width: width, alignment: .leading)
     }
 
     private func clickAfterActivationCell(for modifier: MappingModifier, width: CGFloat) -> some View {
-        Group {
-            if modifier == .none {
-                VStack(alignment: .leading, spacing: 6) {
-                    Picker("", selection: mappingBinding(source: MappingSource.click, modifier: modifier)) {
-                        ForEach(DockAction.allCases, id: \.self) { action in
-                            Text(action.displayName).tag(action)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .controlSize(.regular)
-                    .frame(width: width - 20, alignment: .leading)
-
-                    if shouldShowClickAppExposeMultipleWindowsToggle {
-                        HStack(spacing: 0) {
-                            Spacer(minLength: 0)
-                            Toggle(">1 window only", isOn: $preferences.clickAppExposeRequiresMultipleWindows)
-                                .toggleStyle(.checkbox)
-                                .font(.system(size: 12))
-                                .fixedSize()
-                            Spacer(minLength: 0)
-                        }
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, shouldShowClickAppExposeMultipleWindowsToggle ? 6 : 0)
-            } else {
-                tablePickerCell(selection: mappingBinding(source: MappingSource.click, modifier: modifier), width: width)
-            }
-        }
-        .frame(width: width, alignment: .leading)
+        tablePickerCell(selection: mappingBinding(source: .click, modifier: modifier),
+                        width: width,
+                        appExposeToggle: appExposeToggleBinding(source: .click, modifier: modifier))
     }
 
     private func rowHeight(for modifier: MappingModifier) -> CGFloat {
-        if modifier == .none && (shouldShowFirstClickAppExposeMultipleWindowsToggle || shouldShowClickAppExposeMultipleWindowsToggle) {
-            return expandedFirstClickRowHeight
+        shouldExpandRow(for: modifier) ? expandedFirstClickRowHeight : rowHeight
+    }
+
+    private func shouldExpandRow(for modifier: MappingModifier) -> Bool {
+        if modifier == .none && shouldShowFirstClickAppExposeMultipleWindowsToggle {
+            return true
         }
-        return rowHeight
+
+        if modifier != .none && firstClickActionBinding(for: modifier).wrappedValue == .appExpose {
+            return true
+        }
+
+        return actionIsAppExpose(for: .click, modifier: modifier)
+            || actionIsAppExpose(for: .scrollUp, modifier: modifier)
+            || actionIsAppExpose(for: .scrollDown, modifier: modifier)
     }
 
     private var shouldShowFirstClickAppExposeMultipleWindowsToggle: Bool {
         preferences.firstClickBehavior == .appExpose
     }
 
-    private var shouldShowClickAppExposeMultipleWindowsToggle: Bool {
-        preferences.clickAction == .appExpose
+    private func actionIsAppExpose(for source: MappingSource, modifier: MappingModifier) -> Bool {
+        mappingBinding(source: source, modifier: modifier).wrappedValue == .appExpose
+    }
+
+    private func appExposeToggleBinding(source: MappingSource, modifier: MappingModifier) -> Binding<Bool> {
+        if source == .click && modifier == .none {
+            return $preferences.clickAppExposeRequiresMultipleWindows
+        }
+        return preferences.appExposeMultipleWindowsBinding(slot: slotKey(for: source, modifier: modifier))
+    }
+
+    private func firstClickAppExposeToggleBinding(for modifier: MappingModifier) -> Binding<Bool> {
+        if modifier == .none {
+            return $preferences.firstClickAppExposeRequiresMultipleWindows
+        }
+        return preferences.appExposeMultipleWindowsBinding(slot: firstClickSlotKey(for: modifier))
+    }
+
+    private func slotKey(for source: MappingSource, modifier: MappingModifier) -> String {
+        AppExposeSlotKey.make(source: source.appExposeSlotSource, modifier: modifier.appExposeSlotModifier)
+    }
+
+    private func firstClickSlotKey(for modifier: MappingModifier) -> String {
+        AppExposeSlotKey.make(source: .firstClick, modifier: modifier.appExposeSlotModifier)
     }
 
     private func firstClickActionBinding(for modifier: MappingModifier) -> Binding<DockAction> {

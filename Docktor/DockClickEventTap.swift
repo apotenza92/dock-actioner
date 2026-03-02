@@ -237,8 +237,10 @@ final class DockClickEventTap {
             return isContinuous ? continuousScrollConsume : false
         }
         
-        // Treat positive deltas as scroll down to align with trackpad "natural" scrolling and observed behavior.
-        let direction: ScrollDirection = delta > 0 ? .down : .up
+        // Treat "up" / "down" as physical gesture direction.
+        // CGEvent already reflects the user's configured scrolling behavior,
+        // so avoid applying an additional inversion based on system preferences.
+        let direction: ScrollDirection = delta > 0 ? .up : .down
 
         Logger.debug("DockClickEventTap: Raw scroll at \(location.x), \(location.y) (delta: \(delta), dir: \(direction == .up ? "up" : "down"), continuous: \(isContinuous))")
         let shouldConsume = scrollHandler?(location, direction, flags) ?? false

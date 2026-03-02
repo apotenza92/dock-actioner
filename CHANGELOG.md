@@ -6,6 +6,12 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
+## [v0.0.21]
+
+- Fixed Allen-reported Dock regression cases: wrong-target/finicky `Hide App` behavior and swallowed third click during repeated App Exposé clicks.
+- Added per-slot `>1 window only` App Exposé gating for modifier rows and scroll mappings, with matching settings UI toggles and preference persistence.
+- Hardened App Exposé click-path state handling when the clicked app is already active while Exposé tracking is in progress.
+
 ## [v0.0.20]
 
 - Reworked the top settings layout into three columns (`General`, `Updates`, `Permissions`) with updated control grouping and wording, including `Active App Click` in the mappings table header.

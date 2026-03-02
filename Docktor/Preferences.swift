@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import ServiceManagement
+import SwiftUI
 
 enum DockAction: String, CaseIterable, Codable {
     case none = "none"
@@ -90,6 +91,30 @@ enum UpdateCheckFrequency: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum AppExposeSlotSource: String {
+    case click
+    case firstClick
+    case scrollUp
+    case scrollDown
+}
+
+enum AppExposeSlotModifier: String {
+    case none
+    case shift
+    case option
+    case shiftOption
+}
+
+enum AppExposeSlotKey {
+    static func make(source: AppExposeSlotSource, modifier: AppExposeSlotModifier) -> String {
+        make(source: source.rawValue, modifier: modifier.rawValue)
+    }
+
+    static func make(source: String, modifier: String) -> String {
+        "\(source)_\(modifier)"
+    }
+}
+
 @MainActor
 final class Preferences: ObservableObject {
     static let shared = Preferences()
@@ -123,13 +148,14 @@ final class Preferences: ObservableObject {
     private let firstClickShiftOptionActionKey = "firstClickShiftOptionAction"
     private let firstClickAppExposeRequiresMultipleWindowsKey = "firstClickAppExposeRequiresMultipleWindows"
     private let clickAppExposeRequiresMultipleWindowsKey = "clickAppExposeRequiresMultipleWindows"
+    private let appExposeRequiresMultipleWindowsMapKey = "appExposeRequiresMultipleWindowsMap"
     private let firstClickModifierActionsMigratedKey = "firstClickModifierActionsMigrated_v6"
 
     private static let showOnStartupPreferenceKey = PreferenceKey<Bool>(name: "showOnStartup", defaultValue: false)
     private static let showMenuBarIconPreferenceKey = PreferenceKey<Bool>(name: "showMenuBarIcon", defaultValue: true)
     private static let firstLaunchCompletedPreferenceKey = PreferenceKey<Bool>(name: "firstLaunchCompleted", defaultValue: false)
     private static let updateCheckFrequencyPreferenceKey = PreferenceKey<UpdateCheckFrequency>(name: "updateCheckFrequency", defaultValue: .daily)
-    private static let firstClickBehaviorPreferenceKey = PreferenceKey<FirstClickBehavior>(name: "firstClickBehavior", defaultValue: .appExpose)
+    private static let firstClickBehaviorPreferenceKey = PreferenceKey<FirstClickBehavior>(name: "firstClickBehavior", defaultValue: .activateApp)
     private static let lastUpdateCheckTimestampPreferenceKey = PreferenceKey<Double>(name: "lastUpdateCheckTimestamp", defaultValue: 0)
 
     // Prevent feedback loop when we adjust login item after a failed toggle.
@@ -157,6 +183,26 @@ final class Preferences: ObservableObject {
         didSet {
             userDefaults.set(clickAppExposeRequiresMultipleWindows, forKey: clickAppExposeRequiresMultipleWindowsKey)
         }
+    }
+
+    /// Per-slot ">1 window" gate for modifier rows and scroll rows.
+    /// Keys follow the pattern "<source>_<modifier>", e.g. "firstClick_shift", "scrollUp_none".
+    /// The no-modifier first-click and active-app-click slots are stored in their own legacy keys above.
+    @Published var appExposeRequiresMultipleWindowsMap: [String: Bool] {
+        didSet {
+            userDefaults.set(appExposeRequiresMultipleWindowsMap, forKey: appExposeRequiresMultipleWindowsMapKey)
+        }
+    }
+
+    func appExposeMultipleWindowsRequired(slot: String) -> Bool {
+        appExposeRequiresMultipleWindowsMap[slot] ?? true
+    }
+
+    func appExposeMultipleWindowsBinding(slot: String) -> Binding<Bool> {
+        Binding(
+            get: { self.appExposeRequiresMultipleWindowsMap[slot] ?? true },
+            set: { self.appExposeRequiresMultipleWindowsMap[slot] = $0 }
+        )
     }
 
     @Published var firstClickShiftAction: DockAction {
@@ -483,12 +529,14 @@ final class Preferences: ObservableObject {
 
         let firstClickAppExposeRequiresMultipleWindows = userDefaults.object(forKey: firstClickAppExposeRequiresMultipleWindowsKey) as? Bool ?? true
         let clickAppExposeRequiresMultipleWindows = userDefaults.object(forKey: clickAppExposeRequiresMultipleWindowsKey) as? Bool ?? true
+        let appExposeRequiresMultipleWindowsMap = userDefaults.object(forKey: appExposeRequiresMultipleWindowsMapKey) as? [String: Bool] ?? [:]
 
         // Assign stored properties last
         self.clickAction = clickAction
         self.firstClickBehavior = firstClickBehavior
         self.firstClickAppExposeRequiresMultipleWindows = firstClickAppExposeRequiresMultipleWindows
         self.clickAppExposeRequiresMultipleWindows = clickAppExposeRequiresMultipleWindows
+        self.appExposeRequiresMultipleWindowsMap = appExposeRequiresMultipleWindowsMap
         self.firstClickShiftAction = firstClickShiftAction
         self.firstClickOptionAction = firstClickOptionAction
         self.firstClickShiftOptionAction = firstClickShiftOptionAction
@@ -522,9 +570,10 @@ final class Preferences: ObservableObject {
 
     func resetMappingsToDefaults() {
         clickAction = .appExpose
-        firstClickBehavior = .appExpose
+        firstClickBehavior = .activateApp
         firstClickAppExposeRequiresMultipleWindows = true
         clickAppExposeRequiresMultipleWindows = true
+        appExposeRequiresMultipleWindowsMap = [:]
 
         firstClickShiftAction = .bringAllToFront
         firstClickOptionAction = .singleAppMode

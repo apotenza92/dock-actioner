@@ -508,7 +508,8 @@ final class DockExposeCoordinator: ObservableObject {
     private func shouldRecoverDockPressedState(after action: DockAction?) -> Bool {
         guard let action else { return false }
         // App Exposé clicks are pass-through and should never require recovery.
-        return action != .appExpose
+        // Hide App consumes the click itself; a synthetic release would cause the Dock to re-activate the app.
+        return action != .appExpose && action != .hideApp
     }
 
     private func scheduleDockPressedStateRecovery(at location: CGPoint,
@@ -540,8 +541,11 @@ final class DockExposeCoordinator: ObservableObject {
         let clickedBundle = context.clickedBundle
         let appExposeActive = isAppExposeInteractionActive(frontmostBefore: frontmostBefore)
         let isPlainClick = modifierCombination(from: flags) == .none
+        let clickedAppIsActive = NSWorkspace.shared.runningApplications.contains {
+            $0.bundleIdentifier == clickedBundle && $0.isActive
+        }
 
-        Logger.debug("WORKFLOW: click=\(context.clickSequence) frontmost=\(frontmostBefore ?? "nil"), clicked=\(clickedBundle), windowsDown=\(context.windowCountAtMouseDown.map(String.init) ?? "nil"), fallbackLatched=\(context.forceFirstClickActivateFallback), lastTriggered=\(lastTriggeredBundle ?? "nil"), currentExpose=\(currentExposeApp ?? "nil")")
+        Logger.debug("WORKFLOW: click=\(context.clickSequence) frontmost=\(frontmostBefore ?? "nil"), clicked=\(clickedBundle), clickedIsActive=\(clickedAppIsActive), windowsDown=\(context.windowCountAtMouseDown.map(String.init) ?? "nil"), fallbackLatched=\(context.forceFirstClickActivateFallback), lastTriggered=\(lastTriggeredBundle ?? "nil"), currentExpose=\(currentExposeApp ?? "nil")")
 
         if !appExposeActive,
            let trackedExposeApp = currentExposeApp,
@@ -561,6 +565,22 @@ final class DockExposeCoordinator: ObservableObject {
         }
 
         if appExposeActive {
+            if currentExposeApp == clickedBundle {
+                // User clicked the same app whose windows are in App Exposé – the Dock should dismiss
+                // App Exposé and focus the app. Reset tracking now so the next click is handled as a
+                // regular active-app click, and assert activation in case Dock focus handoff races.
+                Logger.debug("WORKFLOW: App Exposé active - user clicked current app icon; resetting tracking")
+                resetExposeTracking()
+                scheduleDockActivationAssertionIfNeeded(for: clickedBundle,
+                                                        frontmostBefore: frontmostBefore,
+                                                        reason: "clickExposeCurrentAppDismiss")
+                let bundleToActivate = clickedBundle
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                    _ = WindowManager.activateAndShowMainWindow(bundleIdentifier: bundleToActivate)
+                }
+                recordActionExecution(action: .activateApp, bundle: clickedBundle, source: "clickExposeCurrentApp")
+                return false
+            }
             if currentExposeApp != clickedBundle || lastTriggeredBundle != clickedBundle {
                 Logger.debug("WORKFLOW: App Exposé active - tracking switch target \(clickedBundle)")
                 currentExposeApp = clickedBundle
@@ -594,7 +614,7 @@ final class DockExposeCoordinator: ObservableObject {
             return true
         }
 
-        if frontmostBefore != clickedBundle {
+        if frontmostBefore != clickedBundle && !clickedAppIsActive {
             if lastTriggeredBundle != nil {
                 Logger.debug("WORKFLOW: App Exposé active - user clicked different app (\(clickedBundle)) to show its windows")
 
@@ -696,9 +716,13 @@ final class DockExposeCoordinator: ObservableObject {
                 // Let Dock handle the click (e.g. create/show a window) without immediately opening App Exposé.
                 return false
             }
-            if preferences.clickAppExposeRequiresMultipleWindows, windowCountNow < 2 {
+            let clickModifier = modifierCombination(from: flags)
+            let clickSlot = appExposeSlotKey(for: .click, modifier: clickModifier)
+            let clickRequiresMultiple = clickModifier == .none
+                ? preferences.clickAppExposeRequiresMultipleWindows
+                : preferences.appExposeMultipleWindowsRequired(slot: clickSlot)
+            if clickRequiresMultiple, windowCountNow < 2 {
                 Logger.debug("APP_EXPOSE_DECISION: click appExpose skipped for \(clickedBundle): fewer than two windows")
-                // Respect the Active App >1 window App Exposé preference for click-after-activation.
                 return false
             }
             Logger.debug("WORKFLOW: App Exposé trigger from click")
@@ -818,6 +842,16 @@ final class DockExposeCoordinator: ObservableObject {
             resetExposeTracking()
             return true
         case .appExpose:
+            let scrollModifier = modifierCombination(from: flags)
+            let scrollSlot = appExposeSlotKey(for: source, modifier: scrollModifier)
+            let scrollRequiresMultiple = preferences.appExposeMultipleWindowsRequired(slot: scrollSlot)
+            if scrollRequiresMultiple {
+                let windowCountNow = WindowManager.totalWindowCount(bundleIdentifier: clickedBundle)
+                if windowCountNow < 2 {
+                    Logger.debug("APP_EXPOSE_DECISION: scroll appExpose skipped for \(clickedBundle): fewer than two windows")
+                    return false
+                }
+            }
             triggerAppExpose(for: clickedBundle)
             // Keep scroll pass-through for App Exposé trigger path.
             return false
@@ -877,6 +911,14 @@ final class DockExposeCoordinator: ObservableObject {
         case (false, false):
             return .none
         }
+    }
+
+    private func appExposeSlotKey(for source: ActionSource, modifier: ModifierCombination) -> String {
+        AppExposeSlotKey.make(source: source.rawValue, modifier: modifier.rawValue)
+    }
+
+    private func firstClickSlotKey(for modifier: ModifierCombination) -> String {
+        AppExposeSlotKey.make(source: AppExposeSlotSource.firstClick.rawValue, modifier: modifier.rawValue)
     }
 
     private func configuredAction(for source: ActionSource, flags: CGEventFlags) -> DockAction {
@@ -1047,9 +1089,14 @@ final class DockExposeCoordinator: ObservableObject {
             action = .none
         }
 
-        if action == .appExpose,
-           !shouldRunFirstClickAppExpose(for: bundleIdentifier, windowCountHint: windowCountHint) {
-            return false
+        if action == .appExpose {
+            let slot = firstClickSlotKey(for: modifier)
+            let requiresMultiple = preferences.appExposeMultipleWindowsRequired(slot: slot)
+            if !shouldRunAppExpose(for: bundleIdentifier,
+                                   windowCountHint: windowCountHint,
+                                   requiresMultipleWindows: requiresMultiple) {
+                return false
+            }
         }
 
         if action == .none {
@@ -1181,7 +1228,11 @@ final class DockExposeCoordinator: ObservableObject {
             return false
         }
 
-        if frontmostBefore != clickedBundle {
+        let clickedAppIsActive = NSWorkspace.shared.runningApplications.contains {
+            $0.bundleIdentifier == clickedBundle && $0.isActive
+        }
+
+        if frontmostBefore != clickedBundle && !clickedAppIsActive {
             if lastTriggeredBundle != nil, appExposeInvocationToken != nil {
                 return false
             }
@@ -1286,7 +1337,11 @@ final class DockExposeCoordinator: ObservableObject {
 
         let canRunAppExpose: Bool
         if action == .appExpose {
-            canRunAppExpose = shouldRunFirstClickAppExpose(for: bundleIdentifier, windowCountHint: windowCountHint)
+            let slot = firstClickSlotKey(for: modifier)
+            let requiresMultiple = preferences.appExposeMultipleWindowsRequired(slot: slot)
+            canRunAppExpose = shouldRunAppExpose(for: bundleIdentifier,
+                                                 windowCountHint: windowCountHint,
+                                                 requiresMultipleWindows: requiresMultiple)
             if !canRunAppExpose {
                 return false
             }
@@ -1303,16 +1358,24 @@ final class DockExposeCoordinator: ObservableObject {
 
     private func shouldRunFirstClickAppExpose(for bundleIdentifier: String,
                                               windowCountHint: Int? = nil) -> Bool {
+        shouldRunAppExpose(for: bundleIdentifier,
+                           windowCountHint: windowCountHint,
+                           requiresMultipleWindows: preferences.firstClickAppExposeRequiresMultipleWindows)
+    }
+
+    private func shouldRunAppExpose(for bundleIdentifier: String,
+                                    windowCountHint: Int? = nil,
+                                    requiresMultipleWindows: Bool) -> Bool {
         let windowCount = windowCountHint ?? WindowManager.totalWindowCount(bundleIdentifier: bundleIdentifier)
         let shouldRun = DockDecisionEngine.shouldRunFirstClickAppExpose(
             windowCount: windowCount,
-            requiresMultipleWindows: preferences.firstClickAppExposeRequiresMultipleWindows
+            requiresMultipleWindows: requiresMultipleWindows
         )
         if !shouldRun {
             if windowCount == 0 {
-                Logger.debug("WORKFLOW: First click appExpose skipped for \(bundleIdentifier): no windows")
-            } else if preferences.firstClickAppExposeRequiresMultipleWindows && windowCount < 2 {
-                Logger.debug("WORKFLOW: First click appExpose skipped for \(bundleIdentifier): fewer than two windows")
+                Logger.debug("WORKFLOW: appExpose skipped for \(bundleIdentifier): no windows")
+            } else if requiresMultipleWindows && windowCount < 2 {
+                Logger.debug("WORKFLOW: appExpose skipped for \(bundleIdentifier): fewer than two windows")
             }
         }
         return shouldRun
