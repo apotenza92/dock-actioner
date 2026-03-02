@@ -6,11 +6,19 @@ Docktor is a lightweight macOS menu bar app that lets you run actions by clickin
 
 ## Defaults
 
-- First click on an inactive app: `App Expose`
+- First click on an inactive app: `Activate App`
 - Click after app activation: `App Expose`
+- Shift + first click (inactive app): `Hide Others`
+- Shift + click (active app click): `-`
 - Scroll up: `Hide Others`
 - Scroll down: `Hide App`
-- Optional: independent `>1 window only` toggles can gate App Expose for first-click and Active App flows
+- App Expose `>1 window only` gates are independent per mapping slot (first click, active click, scroll up/down, and modifiers)
+- Default App Expose gates:
+  - First click `App Expose`: `>1 window only` ON
+  - Active app click `App Expose`: `>1 window only` OFF
+- Intended default flow: **double-click a Dock icon to show windows**
+  - Click 1: activate the app
+  - Click 2: open App Expose for that app
 
 ## Install
 

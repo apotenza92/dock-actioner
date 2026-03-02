@@ -6,6 +6,14 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
+## [v0.0.23]
+
+- Updated defaults: first click now defaults to `Activate App`, while active-app click stays `App Exposé` with `>1 window only` OFF by default.
+- Simplified the action table UI by moving App Exposé gating into picker options (`App Exposé` / `App Exposé (>1 window only)`) for all slots and returning the table to single-row cells.
+- Improved scroll direction handling to follow effective per-device event direction (including remappers like LinearMouse) instead of global-only natural-scroll preference.
+- Added a GitHub mark button next to `About` in settings and refreshed README default-behavior documentation.
+- Standardized Hide toggles so re-running `Hide App` or `Hide Others` now undoes hidden state via `Show All`.
+
 ## [v0.0.22]
 
 - Restored first-click default/reset behavior to `App Exposé`.

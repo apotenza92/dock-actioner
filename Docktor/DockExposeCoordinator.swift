@@ -686,22 +686,9 @@ final class DockExposeCoordinator: ObservableObject {
         case .activateApp:
             return performActivateAppAction(bundleIdentifier: clickedBundle)
         case .hideApp:
-            if WindowManager.isAppHidden(bundleIdentifier: clickedBundle) {
-                _ = WindowManager.unhideApp(bundleIdentifier: clickedBundle)
-                _ = WindowManager.activateAndShowMainWindow(bundleIdentifier: clickedBundle)
-            } else {
-                _ = WindowManager.hideAllWindows(bundleIdentifier: clickedBundle)
-            }
-            resetExposeTracking()
-            return true
+            return performHideAppToggle(targetBundleIdentifier: clickedBundle)
         case .hideOthers:
-            if WindowManager.anyHiddenOthers(excluding: clickedBundle) {
-                _ = WindowManager.showAllApplications()
-            } else {
-                _ = WindowManager.hideOthers(bundleIdentifier: clickedBundle)
-            }
-            resetExposeTracking()
-            return true
+            return performHideOthersToggle(targetBundleIdentifier: clickedBundle)
         case .bringAllToFront:
             if WindowManager.isAppHidden(bundleIdentifier: clickedBundle) {
                 _ = WindowManager.unhideApp(bundleIdentifier: clickedBundle)
@@ -813,27 +800,14 @@ final class DockExposeCoordinator: ObservableObject {
                 return true
             }
             markScrollToggle(action: action, bundleIdentifier: clickedBundle, now: now)
-            if WindowManager.isAppHidden(bundleIdentifier: clickedBundle) {
-                _ = WindowManager.unhideApp(bundleIdentifier: clickedBundle)
-                _ = WindowManager.activateAndShowMainWindow(bundleIdentifier: clickedBundle)
-            } else {
-                _ = WindowManager.hideAllWindows(bundleIdentifier: clickedBundle)
-            }
-            resetExposeTracking()
-            return true
+            return performHideAppToggle(targetBundleIdentifier: clickedBundle)
         case .hideOthers:
             if shouldThrottleScrollToggle(action: action, bundleIdentifier: clickedBundle, now: now) {
                 Logger.debug("WORKFLOW: Scroll toggle throttle active for \(clickedBundle) action=\(action.rawValue)")
                 return true
             }
             markScrollToggle(action: action, bundleIdentifier: clickedBundle, now: now)
-            if WindowManager.anyHiddenOthers(excluding: clickedBundle) {
-                _ = WindowManager.showAllApplications()
-            } else {
-                _ = WindowManager.hideOthers(bundleIdentifier: clickedBundle)
-            }
-            resetExposeTracking()
-            return true
+            return performHideOthersToggle(targetBundleIdentifier: clickedBundle)
         case .bringAllToFront:
             if WindowManager.isAppHidden(bundleIdentifier: clickedBundle) {
                 _ = WindowManager.unhideApp(bundleIdentifier: clickedBundle)
@@ -1116,22 +1090,9 @@ final class DockExposeCoordinator: ObservableObject {
         case .activateApp:
             return performActivateAppAction(bundleIdentifier: bundleIdentifier)
         case .hideApp:
-            if WindowManager.isAppHidden(bundleIdentifier: bundleIdentifier) {
-                _ = WindowManager.unhideApp(bundleIdentifier: bundleIdentifier)
-                _ = WindowManager.activateAndShowMainWindow(bundleIdentifier: bundleIdentifier)
-            } else {
-                _ = WindowManager.hideAllWindows(bundleIdentifier: bundleIdentifier)
-            }
-            resetExposeTracking()
-            return true
+            return performHideAppToggle(targetBundleIdentifier: bundleIdentifier)
         case .hideOthers:
-            if WindowManager.anyHiddenOthers(excluding: bundleIdentifier) {
-                _ = WindowManager.showAllApplications()
-            } else {
-                _ = WindowManager.hideOthers(bundleIdentifier: bundleIdentifier)
-            }
-            resetExposeTracking()
-            return true
+            return performHideOthersToggle(targetBundleIdentifier: bundleIdentifier)
         case .bringAllToFront:
             if WindowManager.isAppHidden(bundleIdentifier: bundleIdentifier) {
                 _ = WindowManager.unhideApp(bundleIdentifier: bundleIdentifier)
@@ -1394,6 +1355,30 @@ final class DockExposeCoordinator: ObservableObject {
         }
 
         _ = WindowManager.activateAndShowMainWindow(bundleIdentifier: bundleIdentifier)
+        resetExposeTracking()
+        return true
+    }
+
+    private func performHideAppToggle(targetBundleIdentifier: String) -> Bool {
+        // Redoing Hide App should undo hidden state globally (show all).
+        if WindowManager.isAppHidden(bundleIdentifier: targetBundleIdentifier)
+            || WindowManager.anyHiddenOthers(excluding: targetBundleIdentifier) {
+            _ = WindowManager.showAllApplications()
+        } else {
+            _ = WindowManager.hideAllWindows(bundleIdentifier: targetBundleIdentifier)
+        }
+        resetExposeTracking()
+        return true
+    }
+
+    private func performHideOthersToggle(targetBundleIdentifier: String) -> Bool {
+        // Redoing Hide Others should always undo by showing all apps.
+        if WindowManager.isAppHidden(bundleIdentifier: targetBundleIdentifier)
+            || WindowManager.anyHiddenOthers(excluding: targetBundleIdentifier) {
+            _ = WindowManager.showAllApplications()
+        } else {
+            _ = WindowManager.hideOthers(bundleIdentifier: targetBundleIdentifier)
+        }
         resetExposeTracking()
         return true
     }

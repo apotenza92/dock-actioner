@@ -156,7 +156,7 @@ final class Preferences: ObservableObject {
     private static let showMenuBarIconPreferenceKey = PreferenceKey<Bool>(name: "showMenuBarIcon", defaultValue: true)
     private static let firstLaunchCompletedPreferenceKey = PreferenceKey<Bool>(name: "firstLaunchCompleted", defaultValue: false)
     private static let updateCheckFrequencyPreferenceKey = PreferenceKey<UpdateCheckFrequency>(name: "updateCheckFrequency", defaultValue: .daily)
-    private static let firstClickBehaviorPreferenceKey = PreferenceKey<FirstClickBehavior>(name: "firstClickBehavior", defaultValue: .appExpose)
+    private static let firstClickBehaviorPreferenceKey = PreferenceKey<FirstClickBehavior>(name: "firstClickBehavior", defaultValue: .activateApp)
     private static let lastUpdateCheckTimestampPreferenceKey = PreferenceKey<Double>(name: "lastUpdateCheckTimestamp", defaultValue: 0)
 
     // Prevent feedback loop when we adjust login item after a failed toggle.
@@ -431,11 +431,11 @@ final class Preferences: ObservableObject {
         }
 
         // Extended modifier mappings.
-        var shiftClickAction = Self.loadAction(from: userDefaults, forKey: shiftClickActionKey) ?? .bringAllToFront
+        var shiftClickAction = Self.loadAction(from: userDefaults, forKey: shiftClickActionKey) ?? .none
         var optionClickAction = Self.loadAction(from: userDefaults, forKey: optionClickActionKey) ?? .singleAppMode
         var shiftOptionClickAction = Self.loadAction(from: userDefaults, forKey: shiftOptionClickActionKey) ?? .none
 
-        var firstClickShiftAction = Self.loadAction(from: userDefaults, forKey: firstClickShiftActionKey) ?? .bringAllToFront
+        var firstClickShiftAction = Self.loadAction(from: userDefaults, forKey: firstClickShiftActionKey) ?? .hideOthers
         var firstClickOptionAction = Self.loadAction(from: userDefaults, forKey: firstClickOptionActionKey) ?? .singleAppMode
         var firstClickShiftOptionAction = Self.loadAction(from: userDefaults, forKey: firstClickShiftOptionActionKey) ?? .none
 
@@ -451,7 +451,7 @@ final class Preferences: ObservableObject {
         if !modifierMigrated {
             // Respect explicit values when present, otherwise seed new keys.
             if userDefaults.object(forKey: shiftClickActionKey) == nil {
-                shiftClickAction = .bringAllToFront
+                shiftClickAction = .none
             }
             if userDefaults.object(forKey: optionClickActionKey) == nil {
                 optionClickAction = .singleAppMode
@@ -542,7 +542,7 @@ final class Preferences: ObservableObject {
         let firstClickBehavior = settingsStore.value(for: Self.firstClickBehaviorPreferenceKey)
 
         let firstClickAppExposeRequiresMultipleWindows = userDefaults.object(forKey: firstClickAppExposeRequiresMultipleWindowsKey) as? Bool ?? true
-        let clickAppExposeRequiresMultipleWindows = userDefaults.object(forKey: clickAppExposeRequiresMultipleWindowsKey) as? Bool ?? true
+        let clickAppExposeRequiresMultipleWindows = userDefaults.object(forKey: clickAppExposeRequiresMultipleWindowsKey) as? Bool ?? false
         var appExposeRequiresMultipleWindowsMap = userDefaults.object(forKey: appExposeRequiresMultipleWindowsMapKey) as? [String: Bool] ?? [:]
 
         let appExposeMapMigrated = userDefaults.bool(forKey: appExposeRequiresMultipleWindowsMapMigratedKey)
@@ -625,12 +625,12 @@ final class Preferences: ObservableObject {
 
     func resetMappingsToDefaults() {
         clickAction = .appExpose
-        firstClickBehavior = .appExpose
+        firstClickBehavior = .activateApp
         firstClickAppExposeRequiresMultipleWindows = true
-        clickAppExposeRequiresMultipleWindows = true
+        clickAppExposeRequiresMultipleWindows = false
         appExposeRequiresMultipleWindowsMap = [:]
 
-        firstClickShiftAction = .bringAllToFront
+        firstClickShiftAction = .hideOthers
         firstClickOptionAction = .singleAppMode
         firstClickShiftOptionAction = .none
 

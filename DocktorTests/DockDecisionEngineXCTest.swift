@@ -55,23 +55,14 @@ final class DockDecisionEngineXCTest: XCTestCase {
         )
     }
 
-    func testScrollDirectionResolutionForNaturalAndStandardModes() {
+    func testScrollDirectionResolutionUsesEventDeltaSign() {
         XCTAssertEqual(
-            DockDecisionEngine.resolvedScrollDirection(delta: 1, naturalScrollingEnabled: true),
+            DockDecisionEngine.resolvedScrollDirection(delta: 1),
             .up
         )
         XCTAssertEqual(
-            DockDecisionEngine.resolvedScrollDirection(delta: -1, naturalScrollingEnabled: true),
+            DockDecisionEngine.resolvedScrollDirection(delta: -1),
             .down
-        )
-
-        XCTAssertEqual(
-            DockDecisionEngine.resolvedScrollDirection(delta: 1, naturalScrollingEnabled: false),
-            .down
-        )
-        XCTAssertEqual(
-            DockDecisionEngine.resolvedScrollDirection(delta: -1, naturalScrollingEnabled: false),
-            .up
         )
     }
 }

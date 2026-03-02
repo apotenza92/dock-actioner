@@ -78,11 +78,10 @@ enum DockDecisionEngine {
         }
     }
 
-    static func resolvedScrollDirection(delta: Double,
-                                        naturalScrollingEnabled: Bool) -> DecisionScrollDirection {
-        if naturalScrollingEnabled {
-            return delta > 0 ? .up : .down
-        }
-        return delta > 0 ? .down : .up
+    static func resolvedScrollDirection(delta: Double) -> DecisionScrollDirection {
+        // Use event delta direction directly. macOS (and input tools like LinearMouse)
+        // already apply per-device scroll direction policy before we receive the event.
+        // This keeps mapping aligned with the user's actual device expectations.
+        return delta > 0 ? .up : .down
     }
 }

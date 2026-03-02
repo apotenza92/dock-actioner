@@ -132,11 +132,6 @@ final class DockClickEventTap {
         leftMouseDragExceededThreshold = false
     }
 
-    private static func naturalScrollingEnabled() -> Bool {
-        (UserDefaults.standard
-            .persistentDomain(forName: UserDefaults.globalDomain)?["com.apple.swipescrolldirection"] as? Bool) ?? true
-    }
-
     private func didReceiveClick(event: CGEvent, phase: ClickPhase) -> Bool {
         let sourceUserData = event.getIntegerValueField(.eventSourceUserData)
         if sourceUserData == DockClickEventTap.syntheticReleasePassthroughUserData {
@@ -242,14 +237,13 @@ final class DockClickEventTap {
             return isContinuous ? continuousScrollConsume : false
         }
         
-        // Align Up/Down slot routing with the user's macOS scrolling mode.
-        // Natural and Standard modes intentionally map opposite delta signs.
-        let naturalScrollingEnabled = Self.naturalScrollingEnabled()
-        let resolvedDirection = DockDecisionEngine.resolvedScrollDirection(delta: delta,
-                                                                           naturalScrollingEnabled: naturalScrollingEnabled)
+        // Route Up/Down by the effective delta sign for this event/device.
+        // This respects per-device direction settings (trackpad vs mouse) and
+        // third-party remappers (e.g. LinearMouse) that transform events upstream.
+        let resolvedDirection = DockDecisionEngine.resolvedScrollDirection(delta: delta)
         let direction: ScrollDirection = resolvedDirection == .up ? .up : .down
 
-        Logger.debug("DockClickEventTap: Raw scroll at \(location.x), \(location.y) (delta: \(delta), dir: \(direction == .up ? "up" : "down"), natural: \(naturalScrollingEnabled), continuous: \(isContinuous))")
+        Logger.debug("DockClickEventTap: Raw scroll at \(location.x), \(location.y) (delta: \(delta), dir: \(direction == .up ? "up" : "down"), continuous: \(isContinuous))")
         let shouldConsume = scrollHandler?(location, direction, flags) ?? false
         Logger.debug("DockClickEventTap: Scroll consume=\(shouldConsume)")
 
