@@ -6,7 +6,7 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
-## [v0.0.22] - 2026-03-02
+## [v0.0.22]
 
 - Restored first-click default/reset behavior to `App Exposé`.
 - Added compatibility migration + legacy fallback seeding for per-slot App Exposé `>1 window only` gates (from legacy first-click/active-click preferences).
