@@ -6,6 +6,12 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
+## [v0.0.31]
+
+- Refreshed automation reliability to prevent opaque "operation aborted" runs: shared preflight checks, dynamic Debug app discovery, deterministic app selection, and explicit startup/readiness health checks in `scripts/lib/test_common.sh`.
+- Hardened App Exposé runtime state handling under rapid churn by confirming invocation evidence before committing tracking state, plus explicit rollback/reset when invocation is unconfirmed.
+- Improved event-tap timeout recovery and reduced debug logging pressure to avoid stale/latching interaction state after tap timeout conditions.
+
 ## [v0.0.30]
 
 - Fixed Sparkle feed URL injection for packaged builds by parameterizing `SUFeedURL` in `Docktor/Info.plist` (`$(SU_FEED_URL)`) and overriding it per release matrix entry.

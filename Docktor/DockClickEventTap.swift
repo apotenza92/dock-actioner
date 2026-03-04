@@ -21,6 +21,7 @@ final class DockClickEventTap {
     private var scrollHandler: ((CGPoint, ScrollDirection, CGEventFlags) -> Bool)? // Returns true if event should be consumed
     private var anyEventHandler: ((CGEventType) -> Void)?
     private var syntheticReleaseHandler: (() -> Void)?
+    private var tapTimeoutHandler: (() -> Void)?
 
     private(set) var lastStartError: String?
 
@@ -32,18 +33,22 @@ final class DockClickEventTap {
     private var leftMouseDownFlags: CGEventFlags?
     private var leftMouseDragExceededThreshold = false
     private let leftMouseDragThreshold: CGFloat = 6
+    private var timeoutPassThroughUntilUptime: TimeInterval = 0
+    private let timeoutPassThroughCooldown: TimeInterval = 0.18
 
     func start(
         clickHandler: @escaping (CGPoint, Int, CGEventFlags, ClickPhase) -> Bool,
         scrollHandler: @escaping (CGPoint, ScrollDirection, CGEventFlags) -> Bool,
         anyEventHandler: ((CGEventType) -> Void)? = nil,
-        syntheticReleaseHandler: (() -> Void)? = nil
+        syntheticReleaseHandler: (() -> Void)? = nil,
+        tapTimeoutHandler: (() -> Void)? = nil
     ) -> Bool {
         stop()
         self.clickHandler = clickHandler
         self.scrollHandler = scrollHandler
         self.anyEventHandler = anyEventHandler
         self.syntheticReleaseHandler = syntheticReleaseHandler
+        self.tapTimeoutHandler = tapTimeoutHandler
         self.lastStartError = nil
 
         // Capture both mouse clicks and scroll wheel events
@@ -65,8 +70,15 @@ final class DockClickEventTap {
                                                
                                               var shouldConsume = false
                                               switch type {
-                                              case .tapDisabledByTimeout, .tapDisabledByUserInput:
-                                                  Logger.log("DockClickEventTap: Tap disabled (\(type == .tapDisabledByTimeout ? "timeout" : "user input")); re-enabling.")
+                                              case .tapDisabledByTimeout:
+                                                  Logger.log("DockClickEventTap: Tap disabled by timeout; resetting state, enabling pass-through cooldown, and re-enabling tap.")
+                                                  coordinator.recoverAfterTapTimeout()
+                                                  if let tapPort = coordinator.eventTap {
+                                                      CGEvent.tapEnable(tap: tapPort, enable: true)
+                                                  }
+                                                  return Unmanaged.passUnretained(event)
+                                              case .tapDisabledByUserInput:
+                                                  Logger.log("DockClickEventTap: Tap disabled by user input; re-enabling.")
                                                   if let tapPort = coordinator.eventTap {
                                                       CGEvent.tapEnable(tap: tapPort, enable: true)
                                                   }
@@ -123,6 +135,12 @@ final class DockClickEventTap {
         scrollHandler = nil
         anyEventHandler = nil
         syntheticReleaseHandler = nil
+        tapTimeoutHandler = nil
+        timeoutPassThroughUntilUptime = 0
+        resetInteractionState()
+    }
+
+    private func resetInteractionState() {
         continuousScrollActive = false
         continuousScrollConsume = false
         lastContinuousScrollTime = 0
@@ -132,11 +150,25 @@ final class DockClickEventTap {
         leftMouseDragExceededThreshold = false
     }
 
+    private func recoverAfterTapTimeout() {
+        resetInteractionState()
+        timeoutPassThroughUntilUptime = ProcessInfo.processInfo.systemUptime + timeoutPassThroughCooldown
+        tapTimeoutHandler?()
+    }
+
+    private func isTimeoutPassThroughCooldownActive() -> Bool {
+        ProcessInfo.processInfo.systemUptime < timeoutPassThroughUntilUptime
+    }
+
     private func didReceiveClick(event: CGEvent, phase: ClickPhase) -> Bool {
         let sourceUserData = event.getIntegerValueField(.eventSourceUserData)
         if sourceUserData == DockClickEventTap.syntheticReleasePassthroughUserData {
             syntheticReleaseHandler?()
             Logger.debug("DockClickEventTap: Passthrough synthetic release event")
+            return false
+        }
+
+        if isTimeoutPassThroughCooldownActive() {
             return false
         }
 
@@ -189,6 +221,10 @@ final class DockClickEventTap {
     }
     
     private func didReceiveScroll(event: CGEvent) -> Bool {
+        if isTimeoutPassThroughCooldownActive() {
+            return false
+        }
+
         let location = event.location
         let flags = event.flags
         

@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/test_common.sh"
 
-require_app_bin
+run_test_preflight false
 capture_dock_state
 
 cleanup() {
@@ -90,11 +90,11 @@ write_pref_bool showMenuBarIcon false
 write_pref_bool showOnStartup false
 start_docktor /tmp/docktor-settings-shell-args.log --settings
 stop_docktor
-if ! rg -q "Launch argument requested settings window" /tmp/docktor-settings-shell-args.log; then
+if ! log_contains "Launch argument requested settings window" /tmp/docktor-settings-shell-args.log; then
   echo "  FAIL: missing launch-argument settings log"
   exit 1
 fi
-if ! rg -q "Opening settings window" /tmp/docktor-settings-shell-args.log; then
+if ! log_contains "Opening settings window" /tmp/docktor-settings-shell-args.log; then
   echo "  FAIL: missing settings open log for --settings"
   exit 1
 fi
@@ -117,7 +117,7 @@ if [[ "$latest_after" == "$latest_before" ]]; then
   echo "  FAIL: no new Docktor run log created for URL test"
   exit 1
 fi
-if rg -q "Received URL request to open settings" "$latest_after"; then
+if log_contains "Received URL request to open settings" "$latest_after"; then
   echo "  URL handler log observed"
 else
   echo "  WARN: URL handler log not observed in latest debug run (LaunchServices may route URL to another installed Docktor bundle)"

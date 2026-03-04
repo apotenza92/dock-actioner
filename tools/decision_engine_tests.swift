@@ -53,6 +53,35 @@ func runDecisionEngineTests() {
         "two windows should run when multiple required"
     )
 
+    // appExposeInvocationConfirmed / shouldCommitAppExposeTracking
+    expect(
+        DockDecisionEngine.appExposeInvocationConfirmed(
+            dispatched: true,
+            evidence: false,
+            requireEvidence: true
+        ) == false,
+        "require-evidence mode should reject dispatch without evidence"
+    )
+
+    expect(
+        DockDecisionEngine.appExposeInvocationConfirmed(
+            dispatched: true,
+            evidence: false,
+            requireEvidence: false
+        ) == true,
+        "best-effort mode should accept dispatch without evidence"
+    )
+
+    expect(
+        DockDecisionEngine.shouldCommitAppExposeTracking(invocationConfirmed: true) == true,
+        "confirmed invocation should commit expose tracking"
+    )
+
+    expect(
+        DockDecisionEngine.shouldCommitAppExposeTracking(invocationConfirmed: false) == false,
+        "unconfirmed invocation should not commit expose tracking"
+    )
+
     // shouldConsumeFirstClickPlainAction
     expect(
         DockDecisionEngine.shouldConsumeFirstClickPlainAction(

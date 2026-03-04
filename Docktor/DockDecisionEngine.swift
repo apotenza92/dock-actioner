@@ -35,6 +35,19 @@ enum DockDecisionEngine {
         return frontmostBefore == "com.apple.dock" && hasTrackingState && isRecentInteraction
     }
 
+    static func appExposeInvocationConfirmed(dispatched: Bool,
+                                             evidence: Bool,
+                                             requireEvidence: Bool) -> Bool {
+        if requireEvidence {
+            return dispatched && evidence
+        }
+        return dispatched
+    }
+
+    static func shouldCommitAppExposeTracking(invocationConfirmed: Bool) -> Bool {
+        invocationConfirmed
+    }
+
     static func shouldRunFirstClickAppExpose(windowCount: Int,
                                              requiresMultipleWindows: Bool) -> Bool {
         guard windowCount > 0 else { return false }

@@ -15,6 +15,7 @@ enum AppExposeInvokeStrategy: String {
 struct AppExposeInvokeResult {
     let dispatched: Bool
     let evidence: Bool
+    let confirmed: Bool
     let strategy: AppExposeInvokeStrategy?
     let attempts: [String]
     let frontmostAfter: String
@@ -33,13 +34,6 @@ private struct AppExposeAttemptOutcome {
     let dispatched: Bool
     let evidence: Bool
     let strategy: AppExposeInvokeStrategy?
-
-    func successful(requireEvidence: Bool) -> Bool {
-        if requireEvidence {
-            return dispatched && evidence
-        }
-        return dispatched
-    }
 }
 
 /// Triggers App Expose via Dock private API.
@@ -66,7 +60,7 @@ final class AppExposeInvoker {
         let baselineDockSignature = dockWindowSignatureSnapshot()
         let outcome = attemptDockNotification(requireEvidence: requireEvidence,
                                               baselineDockSignature: baselineDockSignature)
-        return finalizeResult(outcome)
+        return finalizeResult(outcome, requireEvidence: requireEvidence)
     }
 
     func isApplicationWindowsHotKeyConfigured() -> Bool {
@@ -81,10 +75,15 @@ final class AppExposeInvoker {
         lastInvokeAttempts.append(attempt)
     }
 
-    private func finalizeResult(_ outcome: AppExposeAttemptOutcome) -> AppExposeInvokeResult {
+    private func finalizeResult(_ outcome: AppExposeAttemptOutcome,
+                                requireEvidence: Bool) -> AppExposeInvokeResult {
         let frontmostAfter = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "nil"
+        let confirmed = DockDecisionEngine.appExposeInvocationConfirmed(dispatched: outcome.dispatched,
+                                                                        evidence: outcome.evidence,
+                                                                        requireEvidence: requireEvidence)
         return AppExposeInvokeResult(dispatched: outcome.dispatched,
                                      evidence: outcome.evidence,
+                                     confirmed: confirmed,
                                      strategy: outcome.strategy,
                                      attempts: lastInvokeAttempts,
                                      frontmostAfter: frontmostAfter)

@@ -29,6 +29,42 @@ final class DockDecisionEngineXCTest: XCTestCase {
         XCTAssertTrue(DockDecisionEngine.shouldRunFirstClickAppExpose(windowCount: 2, requiresMultipleWindows: true))
     }
 
+    func testAppExposeInvocationConfirmationRules() {
+        XCTAssertFalse(
+            DockDecisionEngine.appExposeInvocationConfirmed(
+                dispatched: false,
+                evidence: true,
+                requireEvidence: true
+            )
+        )
+        XCTAssertFalse(
+            DockDecisionEngine.appExposeInvocationConfirmed(
+                dispatched: true,
+                evidence: false,
+                requireEvidence: true
+            )
+        )
+        XCTAssertTrue(
+            DockDecisionEngine.appExposeInvocationConfirmed(
+                dispatched: true,
+                evidence: true,
+                requireEvidence: true
+            )
+        )
+        XCTAssertTrue(
+            DockDecisionEngine.appExposeInvocationConfirmed(
+                dispatched: true,
+                evidence: false,
+                requireEvidence: false
+            )
+        )
+    }
+
+    func testExposeTrackingCommitDecision() {
+        XCTAssertTrue(DockDecisionEngine.shouldCommitAppExposeTracking(invocationConfirmed: true))
+        XCTAssertFalse(DockDecisionEngine.shouldCommitAppExposeTracking(invocationConfirmed: false))
+    }
+
     func testPlainFirstClickConsumeBehavior() {
         XCTAssertFalse(
             DockDecisionEngine.shouldConsumeFirstClickPlainAction(

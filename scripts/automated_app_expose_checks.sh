@@ -6,7 +6,7 @@ source "$SCRIPT_DIR/lib/test_common.sh"
 
 LOG_FILE="/tmp/docktor-app-expose-checks.log"
 
-require_app_bin
+run_test_preflight true
 capture_dock_state
 
 cleanup() {
@@ -54,6 +54,7 @@ write_pref_string firstClickBehavior appExpose
 write_pref_bool firstClickAppExposeRequiresMultipleWindows true
 write_pref_string clickAction none
 start_docktor "$LOG_FILE"
+assert_docktor_alive "$LOG_FILE" "scenario1 Docktor process"
 set_process_visible "$TEST_PROCESS_A" true
 set_process_visible "$TEST_PROCESS_B" true
 activate_finder
@@ -72,6 +73,7 @@ write_pref_string firstClickBehavior activateApp
 write_pref_string clickAction appExpose
 write_pref_bool clickAppExposeRequiresMultipleWindows true
 start_docktor "$LOG_FILE"
+assert_docktor_alive "$LOG_FILE" "scenario2 Docktor process"
 set_process_visible "$TEST_PROCESS_A" true
 set_process_visible "$TEST_PROCESS_B" true
 activate_finder
@@ -91,6 +93,7 @@ write_pref_string firstClickBehavior activateApp
 write_pref_string clickAction appExpose
 write_pref_bool clickAppExposeRequiresMultipleWindows false
 start_docktor "$LOG_FILE"
+assert_docktor_alive "$LOG_FILE" "scenario3 Docktor process"
 set_process_visible "$TEST_PROCESS_A" true
 set_process_visible "$TEST_PROCESS_B" true
 activate_finder

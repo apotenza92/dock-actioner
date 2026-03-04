@@ -27,6 +27,7 @@ final class DockExposeCoordinator: ObservableObject {
     private var appExposeInvocationToken: UUID?
     private var clickRecoveryTokenCounter: UInt64 = 0
     private var clickSequenceCounter: UInt64 = 0
+    private var activationAssertionTokenCounter: UInt64 = 0
     private let appExposeDismissGraceWindow: TimeInterval = 0.02
 
     init(preferences: Preferences) {
@@ -112,6 +113,9 @@ final class DockExposeCoordinator: ObservableObject {
             },
             anyEventHandler: { [weak self] type in
                 self?.recordTapEvent(type)
+            },
+            tapTimeoutHandler: { [weak self] in
+                self?.handleEventTapTimeout()
             }
         )
         if !isRunning {
@@ -498,7 +502,6 @@ final class DockExposeCoordinator: ObservableObject {
                 clickRecoveryTokenCounter += 1
                 let recoveryToken = clickRecoveryTokenCounter
                 scheduleDockPressedStateRecovery(at: context.location,
-                                                flags: context.flags,
                                                 expectedBundle: context.clickedBundle,
                                                 clickToken: recoveryToken)
             }
@@ -514,13 +517,16 @@ final class DockExposeCoordinator: ObservableObject {
     }
 
     private func scheduleDockPressedStateRecovery(at location: CGPoint,
-                                                  flags: CGEventFlags,
                                                   expectedBundle: String,
                                                   clickToken: UInt64) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.008) { [weak self] in
             guard let self else { return }
+            guard clickToken == self.clickRecoveryTokenCounter else {
+                Logger.debug("WORKFLOW: Skipping stale mouse-up recovery token=\(clickToken) latest=\(self.clickRecoveryTokenCounter)")
+                return
+            }
             let releasePoint = self.neutralRecoveryPoint(from: location)
-            postSyntheticMouseUpPassthrough(at: releasePoint, flags: flags)
+            postSyntheticMouseUpPassthrough(at: releasePoint, flags: [])
             Logger.debug("WORKFLOW: Posted neutral mouse-up recovery token=\(clickToken) bundle=\(expectedBundle) point=(\(Int(releasePoint.x)),\(Int(releasePoint.y)))")
         }
     }
@@ -698,8 +704,8 @@ final class DockExposeCoordinator: ObservableObject {
             let windowCountNow = WindowManager.totalWindowCount(bundleIdentifier: clickedBundle)
             if windowCountNow == 0 {
                 if shouldSuppressImmediateNoWindowAppExposeClick(for: clickedBundle) {
-                    Logger.debug("APP_EXPOSE_DECISION: click appExpose consumed for \(clickedBundle) during activation grace (windowsNow=0)")
-                    return true
+                    Logger.debug("APP_EXPOSE_DECISION: click appExpose suppression active for \(clickedBundle) during activation grace (windowsNow=0); passing through")
+                    return false
                 }
                 Logger.debug("APP_EXPOSE_DECISION: click appExpose skipped for \(clickedBundle) because windowsNow=0")
                 // Let Dock handle the click (e.g. create/show a window) without immediately opening App Exposé.
@@ -1140,6 +1146,29 @@ final class DockExposeCoordinator: ObservableObject {
         }
     }
 
+    private func handleEventTapTimeout() {
+        clickRecoveryTokenCounter += 1
+        activationAssertionTokenCounter += 1
+        pendingClickContext = nil
+        pendingClickWasDragged = false
+        lastScrollBundle = nil
+        lastScrollDirection = nil
+        lastScrollTime = nil
+
+        let hadExposeState = appExposeInvocationToken != nil
+            || lastTriggeredBundle != nil
+            || currentExposeApp != nil
+            || lastExposeDockClickBundle != nil
+
+        if hadExposeState {
+            Logger.log("WORKFLOW: Event tap timeout recovery: clearing pending click/app Exposé tracking state")
+        } else {
+            Logger.log("WORKFLOW: Event tap timeout recovery: clearing pending click state")
+        }
+
+        resetExposeTracking()
+    }
+
     private func resetExposeTracking() {
         appExposeInvocationToken = nil
         lastTriggeredBundle = nil
@@ -1156,6 +1185,8 @@ final class DockExposeCoordinator: ObservableObject {
 
         let previousLastTriggeredBundle = lastTriggeredBundle
         let previousCurrentExposeApp = currentExposeApp
+        let previousLastExposeDockClickBundle = lastExposeDockClickBundle
+        let previousLastExposeInteractionAt = lastExposeInteractionAt
         let previousAppsWithoutWindows = appsWithoutWindowsInExpose
 
         appExposeInvocationToken = nil
@@ -1169,23 +1200,37 @@ final class DockExposeCoordinator: ObservableObject {
         }
 
         let result = invoker.invokeApplicationWindows(for: bundleIdentifier, requireEvidence: true)
-        Logger.debug("WORKFLOW: App Exposé invoke result target=\(bundleIdentifier) dispatched=\(result.dispatched) evidence=\(result.evidence) strategy=\(result.strategy?.rawValue ?? "none") frontmostAfter=\(result.frontmostAfter)")
+        Logger.debug("WORKFLOW: App Exposé invoke result target=\(bundleIdentifier) dispatched=\(result.dispatched) evidence=\(result.evidence) confirmed=\(result.confirmed) strategy=\(result.strategy?.rawValue ?? "none") frontmostAfter=\(result.frontmostAfter)")
 
-        if result.dispatched {
+        if DockDecisionEngine.shouldCommitAppExposeTracking(invocationConfirmed: result.confirmed) {
             lastTriggeredBundle = bundleIdentifier
             currentExposeApp = bundleIdentifier
             lastExposeDockClickBundle = bundleIdentifier
             lastExposeInteractionAt = Date()
             appsWithoutWindowsInExpose.remove(bundleIdentifier)
+            Logger.debug("WORKFLOW: App Exposé tracking commit confirmed for \(bundleIdentifier)")
             return
+        }
+
+        let rollbackReason: String
+        if result.dispatched && !result.evidence {
+            rollbackReason = "unconfirmed invocation (dispatched without evidence)"
+        } else if result.dispatched {
+            rollbackReason = "unconfirmed invocation"
+        } else {
+            rollbackReason = "dispatch failed"
         }
 
         if previousLastTriggeredBundle != nil || previousCurrentExposeApp != nil {
             lastTriggeredBundle = previousLastTriggeredBundle
             currentExposeApp = previousCurrentExposeApp
+            lastExposeDockClickBundle = previousLastExposeDockClickBundle
+            lastExposeInteractionAt = previousLastExposeInteractionAt
             appsWithoutWindowsInExpose = previousAppsWithoutWindows
+            Logger.debug("WORKFLOW: App Exposé tracking rollback target=\(bundleIdentifier) reason=\(rollbackReason) action=restorePrevious")
         } else {
             resetExposeTracking()
+            Logger.debug("WORKFLOW: App Exposé tracking rollback target=\(bundleIdentifier) reason=\(rollbackReason) action=reset")
         }
     }
 
@@ -1492,18 +1537,10 @@ final class DockExposeCoordinator: ObservableObject {
     }
     
     private func exitAppExpose() {
-        Logger.debug("WORKFLOW: Exiting App Exposé via Escape")
-        appExposeInvocationToken = nil
-        // Send Escape key to close App Exposé
-        if let source = CGEventSource(stateID: .combinedSessionState) {
-            let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 53, keyDown: true)
-            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 53, keyDown: false)
-            keyDown?.post(tap: .cghidEventTap)
-            keyUp?.post(tap: .cghidEventTap)
-        }
-        lastTriggeredBundle = nil
-        currentExposeApp = nil
-        appsWithoutWindowsInExpose.removeAll()
+        // Avoid synthetic Escape injection during rapid click churn.
+        // Synthetic key events can interfere with Dock's own click/menu state machine.
+        Logger.debug("WORKFLOW: Exiting App Exposé tracking (no synthetic Escape)")
+        resetExposeTracking()
     }
 
     private func launchApp(bundleIdentifier: String) {
@@ -1542,19 +1579,32 @@ final class DockExposeCoordinator: ObservableObject {
                                                          reason: String) {
         guard frontmostBefore != bundleIdentifier else { return }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
-            guard let self else { return }
-            guard self.appExposeInvocationToken == nil else { return }
-            guard FrontmostAppTracker.frontmostBundleIdentifier() != bundleIdentifier else { return }
-            guard let app = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == bundleIdentifier }) else {
-                return
-            }
+        activationAssertionTokenCounter += 1
+        let token = activationAssertionTokenCounter
 
-            if app.isHidden {
-                app.unhide()
+        let assertActivation: (TimeInterval, String) -> Void = { [weak self] delay, phase in
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self else { return }
+                guard token == self.activationAssertionTokenCounter else {
+                    Logger.debug("APP_EXPOSE_DECISION: skipping stale activation assertion token=\(token) latest=\(self.activationAssertionTokenCounter) target=\(bundleIdentifier) phase=\(phase)")
+                    return
+                }
+                guard self.appExposeInvocationToken == nil else { return }
+                guard FrontmostAppTracker.frontmostBundleIdentifier() != bundleIdentifier else { return }
+                guard let app = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == bundleIdentifier }) else {
+                    return
+                }
+
+                if app.isHidden {
+                    app.unhide()
+                }
+                _ = app.activate(options: [.activateIgnoringOtherApps])
+                Logger.debug("APP_EXPOSE_DECISION: activation assertion for \(bundleIdentifier) reason=\(reason) phase=\(phase) token=\(token)")
             }
-            _ = app.activate(options: [.activateIgnoringOtherApps])
-            Logger.debug("APP_EXPOSE_DECISION: activation assertion for \(bundleIdentifier) reason=\(reason)")
         }
+
+        // Two-phase assertion: a fast nudge, then a short retry for rapid multi-app churn.
+        assertActivation(0.12, "fast")
+        assertActivation(0.30, "retry")
     }
 }

@@ -39,7 +39,14 @@ enum Logger {
 
     static func debug(_ message: String) {
         guard debugEnabled else { return }
-        log(message)
+        let line = "Docktor: \(message)"
+        oslog.debug("\(line, privacy: .public)")
+        queue.async {
+            if let data = (line + "\n").data(using: .utf8) {
+                try? FileHandle.standardError.write(contentsOf: data)
+            }
+            writeLine(line)
+        }
     }
 
     private static func writeLine(_ line: String) {
