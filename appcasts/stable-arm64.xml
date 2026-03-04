@@ -5,19 +5,18 @@
     <description>Docktor update feed (stable channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.0.26</title>
-      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.26</link>
-      <sparkle:version>2690000</sparkle:version>
-      <sparkle:shortVersionString>0.0.26</sparkle:shortVersionString>
+      <title>Version 0.0.27</title>
+      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.27</link>
+      <sparkle:version>2790000</sparkle:version>
+      <sparkle:shortVersionString>0.0.27</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/docktor/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Restored settings discoverability for background-only launches: opening Docktor from Applications/Dock now reliably opens the settings window, including when another Docktor instance is already running.
-- Added a running-instance handoff for explicit settings opens so duplicate launches request settings in the existing process, then exit cleanly.
-- Auto-restores menu bar icon visibility when settings are explicitly requested (reopen/URL/Finder launch), so users always have a visible way back to settings.]]></description>
-      <pubDate>Wed, 04 Mar 2026 03:10:22 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.26/Docktor-v0.0.26-macos-arm64.zip"
-                 sparkle:edSignature="XyRYKOTPWce/QVsNaJzpzwtf1yIaiwjpIyqTi4Wikr1B9Ir0CbdVwP5wFYiLrHgaDunaIuayOj6wzdxPnL8iBg=="
-                 length="4424278"
+      <description sparkle:format="plain-text"><![CDATA[- Fixed a Sparkle relaunch regression where `Install and Relaunch` could fail to reopen the app if a Finder-style relaunch (`-psn_`) was incorrectly treated as a settings-handoff launch.
+- Restricted running-instance settings handoff to explicit `--settings` launches only, while preserving "click app icon to open Settings" behavior for normal Finder/Dock launches.]]></description>
+      <pubDate>Wed, 04 Mar 2026 03:32:03 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.27/Docktor-v0.0.27-macos-arm64.zip"
+                 sparkle:edSignature="JeoYee+FrIKK+3tXlJw60ELJ4YtQbK53k9/Viy4WqYfkX5cVqwXVNh71kpRtTfiZCwr0HNt+rgOqIWPp4iCgDA=="
+                 length="4424475"
                  type="application/octet-stream" />
     </item>
   </channel>
