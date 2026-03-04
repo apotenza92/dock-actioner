@@ -5,18 +5,18 @@
     <description>Docktor update feed (beta channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.0.28</title>
-      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.28</link>
-      <sparkle:version>2890000</sparkle:version>
-      <sparkle:shortVersionString>0.0.28</sparkle:shortVersionString>
+      <title>Version 0.0.29</title>
+      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.29</link>
+      <sparkle:version>2990000</sparkle:version>
+      <sparkle:shortVersionString>0.0.29</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/docktor/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Fixed App Exposé state cleanup after dismiss so switching to a different app from the Dock works on the first click instead of intermittently requiring a second click.
-- Hardened first-click `Activate App` pass-through by asserting Dock-driven activation when needed, improving reliability after App Exposé close/dismiss flows.]]></description>
-      <pubDate>Wed, 04 Mar 2026 03:53:06 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.28/Docktor-Beta-v0.0.28-macos-arm64.zip"
-                 sparkle:edSignature="AJH5bG5R/Z7+insQYKAIkexsEVuw+1tmg6S8rVW8e2JuvMQFeoJAUrZI3AJR+1TE4tTXBlGGYPXTMUUdRKRqCg=="
-                 length="2644930"
+      <description sparkle:format="plain-text"><![CDATA[- Fixed release packaging so Sparkle feed URLs are channel+architecture-specific at build time (`stable-arm64`, `stable-x64`, `beta-arm64`, `beta-x64`) instead of a single hardcoded stable feed.
+- Ensured Beta app builds consistently follow the Beta appcast track, which already promotes newer stable releases when they are newer than prereleases.]]></description>
+      <pubDate>Wed, 04 Mar 2026 04:08:52 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.29/Docktor-Beta-v0.0.29-macos-arm64.zip"
+                 sparkle:edSignature="86oxRkYEQdcYf+0dp3lYmjUuxv1poHr09TMzE5lqQcm9apjwDGy1eDnR8g9UdFYJKlJFK3jE6yel3wwvRRfrDA=="
+                 length="2645337"
                  type="application/octet-stream" />
     </item>
   </channel>
