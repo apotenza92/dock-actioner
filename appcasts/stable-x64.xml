@@ -5,17 +5,19 @@
     <description>Docktor update feed (stable channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.0.25</title>
-      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.25</link>
-      <sparkle:version>2590000</sparkle:version>
-      <sparkle:shortVersionString>0.0.25</sparkle:shortVersionString>
+      <title>Version 0.0.26</title>
+      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.26</link>
+      <sparkle:version>2690000</sparkle:version>
+      <sparkle:shortVersionString>0.0.26</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/docktor/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Fixed mixed-device scroll direction handling by preferring discrete wheel delta fields for non-continuous mouse events, improving compatibility with per-device remappers like UnnaturalScrollWheels.]]></description>
-      <pubDate>Wed, 04 Mar 2026 01:38:46 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.25/Docktor-v0.0.25-macos-x64.zip"
-                 sparkle:edSignature="KBaNt5giDvYqQnTJf3Z5XSNYD3Q3QYuqjJY0rzR9740qXUQ1gYwwZ1CXzSyTeWGSkUKFkTdMDpZknUrWPkuuBQ=="
-                 length="4431629"
+      <description sparkle:format="plain-text"><![CDATA[- Restored settings discoverability for background-only launches: opening Docktor from Applications/Dock now reliably opens the settings window, including when another Docktor instance is already running.
+- Added a running-instance handoff for explicit settings opens so duplicate launches request settings in the existing process, then exit cleanly.
+- Auto-restores menu bar icon visibility when settings are explicitly requested (reopen/URL/Finder launch), so users always have a visible way back to settings.]]></description>
+      <pubDate>Wed, 04 Mar 2026 03:10:22 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.26/Docktor-v0.0.26-macos-x64.zip"
+                 sparkle:edSignature="bf16k30zlq+n+/otCQ4VgTUZ9evgZAXcakQQrR88ITZMR8fGv/v1iOk+HCZtJwtPSwHTGn/zAkou//lKtANPBw=="
+                 length="4435058"
                  type="application/octet-stream" />
     </item>
   </channel>
