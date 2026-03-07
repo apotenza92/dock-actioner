@@ -5,17 +5,19 @@
     <description>Docktor update feed (beta channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.0.33</title>
-      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.33</link>
-      <sparkle:version>3390000</sparkle:version>
-      <sparkle:shortVersionString>0.0.33</sparkle:shortVersionString>
+      <title>Version 0.0.34</title>
+      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.34</link>
+      <sparkle:version>3490000</sparkle:version>
+      <sparkle:shortVersionString>0.0.34</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/docktor/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Fixed the menu bar icon rendering path to redraw as a template image per display scale, so the glyph stays sharp when moving between non-Retina external displays and Retina MacBook panels.]]></description>
-      <pubDate>Sat, 07 Mar 2026 09:26:21 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.33/Docktor-Beta-v0.0.33-macos-x64.zip"
-                 sparkle:edSignature="o/q9DwnMdQCRGconfX5N2yx0wESOZj6Ppns72PufJazhVjo4qHLe+UKyC6RRpcu92Qk/Y1Mjy/JEEIYtl2HiDw=="
-                 length="2662276"
+      <description sparkle:format="plain-text"><![CDATA[- Added Space-aware AX/CG window filtering for window actions, including private window-to-Space lookup and stronger AX-to-CG window identity matching for current-Space `Minimize All` and `Bring All to Front`.
+- Fixed active-app second-click consistency for `Hide App`, `Hide Others`, `Minimize All`, and `Quit App`, including preventing Dock release recovery from relaunching apps after `Quit App`.
+- Hardened the local regression harnesses for settings and multi-Space Brave checks so release validation covers the new active-app and cross-Space behavior more reliably.]]></description>
+      <pubDate>Sat, 07 Mar 2026 14:09:24 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.34/Docktor-Beta-v0.0.34-macos-x64.zip"
+                 sparkle:edSignature="Yrzar0BaosO4EwOYq3ih71Ea5DHwN6URto1twmIBMmq0IZ3Ba1g8JQjUbRtDlCd9Yn/ClgMWmVCeoOAHVmnXAA=="
+                 length="2671875"
                  type="application/octet-stream" />
     </item>
   </channel>
