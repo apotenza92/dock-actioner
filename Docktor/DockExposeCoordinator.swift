@@ -513,9 +513,10 @@ final class DockExposeCoordinator: ObservableObject {
 
     private func shouldRecoverDockPressedState(after action: DockAction?) -> Bool {
         guard let action else { return false }
-        // Hide App and Quit App should not receive a synthetic release.
-        // For Hide App it can re-activate the app; for Quit App it can relaunch it from the Dock.
-        return action != .hideApp && action != .quitApp
+        // Hide App, App Exposé, and Quit App should not receive a synthetic release.
+        // For Hide App it can re-activate the app; for App Exposé it can immediately collapse
+        // the transition; for Quit App it can relaunch the app from the Dock.
+        return action != .hideApp && action != .appExpose && action != .quitApp
     }
 
     private func scheduleDockPressedStateRecovery(at location: CGPoint,

@@ -6,6 +6,11 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
+## [v0.0.35]
+
+- Fixed an App Exposé regression where the active-app second-click transition could begin and then immediately collapse again because Dock pressed-state recovery posted a synthetic release into the Exposé animation window.
+- Tightened the local multi-Space App Exposé harness so it re-establishes the active-app precondition without reintroducing a focus race before the second click.
+
 ## [v0.0.34]
 
 - Added Space-aware AX/CG window filtering for window actions, including private window-to-Space lookup and stronger AX-to-CG window identity matching for current-Space `Minimize All` and `Bring All to Front`.

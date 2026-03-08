@@ -238,7 +238,6 @@ ensure_target_active_before_second_click() {
     return 1
   fi
 
-  capture_target_snapshot "${scenario_id}-after-first-recovered"
   return 0
 }
 
