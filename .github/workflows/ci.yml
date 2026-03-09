@@ -28,14 +28,42 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Resolve Swift packages with retry
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SOURCE_PACKAGES_DIR="$RUNNER_TEMP/SourcePackages-${{ matrix.channel }}"
+          rm -rf "$SOURCE_PACKAGES_DIR"
+          mkdir -p "$SOURCE_PACKAGES_DIR"
+
+          for attempt in 1 2 3; do
+            if xcodebuild \
+              -project Docktor.xcodeproj \
+              -scheme Docktor \
+              -resolvePackageDependencies \
+              -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR"; then
+              exit 0
+            fi
+
+            if [[ "$attempt" -eq 3 ]]; then
+              echo "::error::Swift package resolution failed after $attempt attempts."
+              exit 1
+            fi
+
+            sleep $((attempt * 10))
+          done
+
       - name: Build Docktor (${{ matrix.channel }})
         run: |
           set -euo pipefail
+          SOURCE_PACKAGES_DIR="$RUNNER_TEMP/SourcePackages-${{ matrix.channel }}"
           xcodebuild \
             -project Docktor.xcodeproj \
             -scheme Docktor \
             -configuration Release \
             -destination "generic/platform=macOS" \
+            -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
             PRODUCT_NAME="${{ matrix.product_name }}" \
             PRODUCT_BUNDLE_IDENTIFIER="${{ matrix.bundle_id }}" \
             ASSETCATALOG_COMPILER_APPICON_NAME="${{ matrix.app_icon }}" \

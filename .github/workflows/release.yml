@@ -146,6 +146,32 @@ jobs:
             -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
+      - name: Resolve Swift packages with retry
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SOURCE_PACKAGES_DIR="$RUNNER_TEMP/SourcePackages-${{ matrix.channel }}-${{ matrix.arch }}"
+          rm -rf "$SOURCE_PACKAGES_DIR"
+          mkdir -p "$SOURCE_PACKAGES_DIR"
+
+          for attempt in 1 2 3; do
+            if xcodebuild \
+              -project Docktor.xcodeproj \
+              -scheme Docktor \
+              -resolvePackageDependencies \
+              -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR"; then
+              exit 0
+            fi
+
+            if [[ "$attempt" -eq 3 ]]; then
+              echo "::error::Swift package resolution failed after $attempt attempts."
+              exit 1
+            fi
+
+            sleep $((attempt * 10))
+          done
+
       - name: Build signed app archive
         shell: bash
         env:
@@ -162,12 +188,14 @@ jobs:
           ARCHIVE_PATH="$RUNNER_TEMP/${{ matrix.package_prefix }}-${{ matrix.arch }}.xcarchive"
           EXPORT_PATH="$RUNNER_TEMP/export-${{ matrix.package_prefix }}-${{ matrix.arch }}"
           EXPORT_OPTIONS_PATH="$RUNNER_TEMP/export-options-${{ matrix.package_prefix }}-${{ matrix.arch }}.plist"
+          SOURCE_PACKAGES_DIR="$RUNNER_TEMP/SourcePackages-${{ matrix.channel }}-${{ matrix.arch }}"
 
           xcodebuild \
             -project Docktor.xcodeproj \
             -scheme Docktor \
             -configuration Release \
             -destination "generic/platform=macOS" \
+            -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
             -archivePath "$ARCHIVE_PATH" \
             archive \
             ARCHS="${{ matrix.xcode_arch }}" \
