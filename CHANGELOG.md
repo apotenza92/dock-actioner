@@ -6,6 +6,11 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
+## [v0.0.38-beta.1]
+
+- Fixed beta branding so the settings window, status item accessibility label, and menu item labels use the bundle product name consistently (`Docktor Beta` for beta builds).
+- Updated remaining settings copy that referenced the stable app name so beta builds no longer show mixed `Docktor`/`Docktor Beta` strings.
+
 ## [v0.0.37]
 
 - Fixed default active-app App Exposé bounce-out by removing mouse-down pre-triggering and enforcing mouse-up pass-through trigger ordering.
