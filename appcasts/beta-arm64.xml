@@ -5,19 +5,19 @@
     <description>Docktor update feed (beta channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.1.1</title>
-      <link>https://github.com/apotenza92/docktor/releases/tag/v0.1.1</link>
-      <sparkle:version>100190000</sparkle:version>
-      <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+      <title>Version 0.1.2</title>
+      <link>https://github.com/apotenza92/docktor/releases/tag/v0.1.2</link>
+      <sparkle:version>100290000</sparkle:version>
+      <sparkle:shortVersionString>0.1.2</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/docktor/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Added a public macOS download page with stable/beta channel switching, Apple Silicon/Intel selection, direct GitHub release downloads, and matching Homebrew install commands.
-- Refreshed project marketing across the download page, README, and GitHub metadata to describe Docktor as customizable Dock click, double-click, and scroll actions, including the shipped default of double click opening App Exposé to show an app's open windows.
-- Updated the download page branding so stable/beta copy, icon swapping, and icon-derived accent colors stay aligned with the selected channel.]]></description>
-      <pubDate>Tue, 10 Mar 2026 11:42:16 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.1.1/Docktor-Beta-v0.1.1-macos-arm64.zip"
-                 sparkle:edSignature="Uf3+m7j2ZqTwjrEEt3rmXA5kg6YfWkXZFIDJmqy6uqjtGeONpkAAlh5vEO7bDW98+GQ73TBGhaY2jFt8GBxCDA=="
-                 length="2681964"
+      <description sparkle:format="plain-text"><![CDATA[- Fixed modifier-click timing so modifier double-click actions no longer get swallowed by the first modifier click, while single-click modifier actions still execute correctly after the system double-click interval.
+- Restored reliable modifier toggle behavior for `Hide Others` and `Hide App`, including second-click undo/show-all handling and target-only unhide for `Hide App`.
+- Added `scripts/automated_modifier_toggle_checks.sh` to cover real Dock GUI regressions for modifier single-click and double-click action interactions.]]></description>
+      <pubDate>Tue, 10 Mar 2026 14:15:13 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.1.2/Docktor-Beta-v0.1.2-macos-arm64.zip"
+                 sparkle:edSignature="Ut4isJFjRARqcHAYPvBnlcsqfQt7nT6Ezi5kFt6NF+E+KSN7tU1AeIHO4x2q8cu+o7opG+tDZ173ERzZjIT7AQ=="
+                 length="2685472"
                  type="application/octet-stream" />
     </item>
   </channel>
