@@ -5,18 +5,19 @@
     <description>Docktor update feed (stable channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.0.38</title>
-      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.38</link>
-      <sparkle:version>3890000</sparkle:version>
-      <sparkle:shortVersionString>0.0.38</sparkle:shortVersionString>
+      <title>Version 0.0.39</title>
+      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.39</link>
+      <sparkle:version>3990000</sparkle:version>
+      <sparkle:shortVersionString>0.0.39</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/docktor/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Fixed settings-window and menu bar labeling to use the bundle product name consistently, so beta builds show `Docktor Beta` instead of mixed stable/beta naming.
-- Updated remaining settings copy that referenced the stable app name so beta builds no longer show mixed `Docktor`/`Docktor Beta` strings.]]></description>
-      <pubDate>Tue, 10 Mar 2026 01:41:23 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.38/Docktor-v0.0.38-macos-arm64.zip"
-                 sparkle:edSignature="3Nj4poCwnsRfD3QLHcSv2CvwxunyHIVy3g7ufr5e40xTZCdXhO65a/bdEkuB7qvvTPGgi4b1mcYVIr90WLeMBw=="
-                 length="4451037"
+      <description sparkle:format="plain-text"><![CDATA[- Changed the shipped defaults so `Show menu bar icon` starts enabled, `Show settings on startup` stays off after the first run, and `Start Docktor Beta at login` remains off by default.
+- Removed the development-only preference overrides that forced the menu bar icon and startup settings window on, so local builds now match the shipped app behavior.
+- Added a settings-shell regression that verifies first launch opens settings once and subsequent launches stay closed when `showOnStartup` is disabled.]]></description>
+      <pubDate>Tue, 10 Mar 2026 02:00:23 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.39/Docktor-v0.0.39-macos-arm64.zip"
+                 sparkle:edSignature="GIYJIfEJI8VFkj++S+MDONwbdF8lw0VY1kpc7o6/9K3gddOsCJ0EUjXsTOUDOr/XX+085xTD08bTsAYYIzG4AA=="
+                 length="4451034"
                  type="application/octet-stream" />
     </item>
   </channel>
