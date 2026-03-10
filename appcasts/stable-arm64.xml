@@ -5,19 +5,19 @@
     <description>Docktor update feed (stable channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.0.39</title>
-      <link>https://github.com/apotenza92/docktor/releases/tag/v0.0.39</link>
-      <sparkle:version>3990000</sparkle:version>
-      <sparkle:shortVersionString>0.0.39</sparkle:shortVersionString>
+      <title>Version 0.1.0</title>
+      <link>https://github.com/apotenza92/docktor/releases/tag/v0.1.0</link>
+      <sparkle:version>100090000</sparkle:version>
+      <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/docktor/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Changed the shipped defaults so `Show menu bar icon` starts enabled, `Show settings on startup` stays off after the first run, and `Start Docktor Beta at login` remains off by default.
-- Removed the development-only preference overrides that forced the menu bar icon and startup settings window on, so local builds now match the shipped app behavior.
-- Added a settings-shell regression that verifies first launch opens settings once and subsequent launches stay closed when `showOnStartup` is disabled.]]></description>
-      <pubDate>Tue, 10 Mar 2026 02:00:23 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.0.39/Docktor-v0.0.39-macos-arm64.zip"
-                 sparkle:edSignature="GIYJIfEJI8VFkj++S+MDONwbdF8lw0VY1kpc7o6/9K3gddOsCJ0EUjXsTOUDOr/XX+085xTD08bTsAYYIzG4AA=="
-                 length="4451034"
+      <description sparkle:format="plain-text"><![CDATA[- Fixed the default `activateApp -> active-app action` double-click path for `Hide App`, `Hide Others`, `Single App Mode`, `Minimize All`, and `Quit App`, including Mail-specific hide fallback handling and stale first-click recovery.
+- Clarified the README defaults so the intended baseline behavior is “double click an app icon to open App Expose” for that app.
+- Added broader Dock-click regression coverage, including the new active-click soak runner plus harness fixes for pinned fixtures, repeated `minimizeAll` setup, and stable fixture-pool pair selection.]]></description>
+      <pubDate>Tue, 10 Mar 2026 06:58:54 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.1.0/Docktor-v0.1.0-macos-arm64.zip"
+                 sparkle:edSignature="4e0tx8TZKmP96pnNCAZncfCENhapxrcPlaWENZ3hj2LmvWqo4Cr2dClRmhnEBhSFzOnCFbezk7CWOU259A9xBA=="
+                 length="4458608"
                  type="application/octet-stream" />
     </item>
   </channel>
