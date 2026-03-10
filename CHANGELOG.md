@@ -6,6 +6,12 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
+## [v0.1.1]
+
+- Added a public macOS download page with stable/beta channel switching, Apple Silicon/Intel selection, direct GitHub release downloads, and matching Homebrew install commands.
+- Refreshed project marketing across the download page, README, and GitHub metadata to describe Docktor as customizable Dock click, double-click, and scroll actions, including the shipped default of double click opening App Exposé to show an app's open windows.
+- Updated the download page branding so stable/beta copy, icon swapping, and icon-derived accent colors stay aligned with the selected channel.
+
 ## [v0.1.0]
 
 - Fixed the default `activateApp -> active-app action` double-click path for `Hide App`, `Hide Others`, `Single App Mode`, `Minimize All`, and `Quit App`, including Mail-specific hide fallback handling and stale first-click recovery.
