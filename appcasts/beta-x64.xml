@@ -5,19 +5,22 @@
     <description>Docktor update feed (beta channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.1.2</title>
-      <link>https://github.com/apotenza92/docktor/releases/tag/v0.1.2</link>
-      <sparkle:version>100290000</sparkle:version>
-      <sparkle:shortVersionString>0.1.2</sparkle:shortVersionString>
+      <title>Version 0.2.0</title>
+      <link>https://github.com/apotenza92/docktor/releases/tag/v0.2.0</link>
+      <sparkle:version>200090000</sparkle:version>
+      <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/docktor/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Fixed modifier-click timing so modifier double-click actions no longer get swallowed by the first modifier click, while single-click modifier actions still execute correctly after the system double-click interval.
-- Restored reliable modifier toggle behavior for `Hide Others` and `Hide App`, including second-click undo/show-all handling and target-only unhide for `Hide App`.
-- Added `scripts/automated_modifier_toggle_checks.sh` to cover real Dock GUI regressions for modifier single-click and double-click action interactions.]]></description>
-      <pubDate>Tue, 10 Mar 2026 14:15:13 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.1.2/Docktor-Beta-v0.1.2-macos-x64.zip"
-                 sparkle:edSignature="5zgB23eDx2khYvNQ2dv5BDKkv01TGbiKe3N/LKlATrZJQPf4TewCJoxXrcL0mT/rxSdio/3qK9O/AhnMkM2hDw=="
-                 length="2699437"
+      <description sparkle:format="plain-text"><![CDATA[- Redesigned Settings into a single compact scrollable window with inline section headers, right-aligned reset actions, richer update status text, and expanded Folder Actions controls.
+- Added configurable folder-stack click and scroll actions, including Dock passthrough, Finder opening with view/group/sort options, and custom “Open With” app targets with async app-list warming.
+- Improved settings responsiveness with instrumented internal timing logs, fixed pane sizing, shared settings services, and a local benchmark harness for reproducible settings timing runs.
+- Hardened Dock hit testing and gesture routing with folder Dock item detection, alternate-axis scroll handling, and drag-path changes that preserve native Dock drag/reorder/drop behavior while reducing drag-start stutter.
+- Improved launch/runtime robustness across Docktor-family installs, update-state reporting, and macOS 14 compatibility by removing deprecated activation calls and tightening main-actor isolation around workspace/private-window APIs.
+- Added coverage and tooling updates for the new Dock hit-test and scroll decision paths, plus Xcode-aware Debug app resolution in shared test helpers and developer docs.]]></description>
+      <pubDate>Thu, 12 Mar 2026 01:04:14 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.2.0/Docktor-Beta-v0.2.0-macos-x64.zip"
+                 sparkle:edSignature="Al7qe515JhBX3POUJmb2AlUNcOQPwo57OPvGefM7KMbpbIwE+fHOZJep2zz/TZ/IZECn+pGT6leH5p1kMEVaBQ=="
+                 length="2803261"
                  type="application/octet-stream" />
     </item>
   </channel>
