@@ -498,24 +498,40 @@ jobs:
     needs:
       - prepare
       - publish-release
-    runs-on: ubuntu-latest
+    runs-on: macos-15
     steps:
       - name: Checkout main branch
         uses: actions/checkout@v4
         with:
           ref: main
 
+      - name: Resolve Sparkle signing tool
+        id: sparkle_tool
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies -project Dockmint.xcodeproj -scheme Dockmint >/dev/null
+
+          SIGN_UPDATE_BIN="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*/SourcePackages/artifacts/sparkle/Sparkle/bin/sign_update' -type f | sort | tail -n 1)"
+          if [[ -z "${SIGN_UPDATE_BIN:-}" ]]; then
+            echo "::error::Unable to locate Sparkle sign_update tool after resolving packages."
+            exit 1
+          fi
+
+          echo "sign_update_bin=$SIGN_UPDATE_BIN" >> "$GITHUB_OUTPUT"
+
       - name: Update Sparkle appcast files
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+          SPARKLE_SIGN_UPDATE_BIN: ${{ steps.sparkle_tool.outputs.sign_update_bin }}
         run: |
           set -euo pipefail
-          python3 -m pip install --quiet cryptography
           python3 scripts/release/update_sparkle_appcasts.py \
             --repo "${{ github.repository }}" \
             --output-dir appcasts \
             --github-token "$GITHUB_TOKEN" \
+            --sparkle-sign-update-bin "$SPARKLE_SIGN_UPDATE_BIN" \
             --require-signatures
 
       - name: Commit and push appcast updates
@@ -577,13 +593,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+          SPARKLE_SIGN_UPDATE_BIN: ${{ steps.sparkle_tool.outputs.sign_update_bin }}
         run: |
           set -euo pipefail
-          python3 -m pip install --quiet cryptography
           python3 scripts/release/update_sparkle_appcasts.py \
             --repo "${{ github.repository }}" \
             --output-dir /tmp/legacy-feed-repo/appcasts \
             --github-token "$GITHUB_TOKEN" \
+            --sparkle-sign-update-bin "$SPARKLE_SIGN_UPDATE_BIN" \
             --require-signatures
 
       - name: Commit and push legacy appcast updates

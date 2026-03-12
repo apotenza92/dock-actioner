@@ -16,14 +16,13 @@ import datetime as dt
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import urllib.error
 import urllib.request
 from email.utils import format_datetime
 from pathlib import Path
-
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 
 STABLE_TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
@@ -230,7 +229,7 @@ def to_rfc2822(iso_timestamp: str) -> str:
     return format_datetime(parsed)
 
 
-def load_signing_key(signing_secret: str | None) -> Ed25519PrivateKey | None:
+def decode_signing_secret(signing_secret: str | None) -> tuple[str, bytes] | None:
     if signing_secret is None:
         return None
     normalized = signing_secret.strip()
@@ -251,26 +250,42 @@ def load_signing_key(signing_secret: str | None) -> Ed25519PrivateKey | None:
         except Exception:
             continue
 
-        if len(decoded) == 32:
-            return Ed25519PrivateKey.from_private_bytes(decoded)
-        if len(decoded) == 64:
-            return Ed25519PrivateKey.from_private_bytes(decoded[:32])
+        if len(decoded) in {32, 96}:
+            return candidate, decoded
 
-        # Some secret stores end up double-encoding the 32-byte seed.
+        # Some secret stores end up double-encoding Sparkle's exported base64 key file.
         try:
             inner = decoded.decode("utf-8").strip()
+        except Exception:
+            continue
+
+        try:
             nested = base64.b64decode(inner, validate=True)
         except Exception:
             continue
 
-        if len(nested) == 32:
-            return Ed25519PrivateKey.from_private_bytes(nested)
-        if len(nested) == 64:
-            return Ed25519PrivateKey.from_private_bytes(nested[:32])
+        if len(nested) in {32, 96}:
+            return inner, nested
 
     raise RuntimeError(
-        "Unsupported Sparkle private key format. Expected base64-encoded 32-byte seed."
+        "Unsupported Sparkle private key format. Expected base64-encoded 32-byte seed or 96-byte legacy secret."
     )
+
+
+def load_signing_key(signing_secret: str | None):
+    decoded = decode_signing_secret(signing_secret)
+    if decoded is None:
+        return None
+
+    _, secret_bytes = decoded
+    if len(secret_bytes) == 96:
+        raise RuntimeError(
+            "Sparkle legacy 96-byte private key format requires the Sparkle sign_update tool. Set SPARKLE_SIGN_UPDATE_BIN or --sparkle-sign-update-bin."
+        )
+
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    return Ed25519PrivateKey.from_private_bytes(secret_bytes)
 
 
 def download_asset(
@@ -297,7 +312,7 @@ def download_asset(
 
 def sign_asset(
     asset: ReleaseAsset,
-    private_key: Ed25519PrivateKey,
+    private_key,
     cache_dir: Path,
     github_token: str | None = None,
 ) -> str:
@@ -309,6 +324,51 @@ def sign_asset(
     payload = path.read_bytes()
     signature = private_key.sign(payload)
     return base64.b64encode(signature).decode("ascii")
+
+
+def sign_asset_with_sparkle_tool(
+    asset: ReleaseAsset,
+    signing_secret: str,
+    sign_update_bin: Path,
+    cache_dir: Path,
+    github_token: str | None = None,
+) -> str:
+    path = cache_dir / asset.name
+
+    if not path.exists() or path.stat().st_size != asset.size:
+        download_asset(asset, path, github_token=github_token)
+
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as key_file:
+        key_file.write(signing_secret)
+        key_file.write("\n")
+        key_file_path = Path(key_file.name)
+
+    try:
+        result = subprocess.run(
+            [
+                str(sign_update_bin),
+                "--ed-key-file",
+                str(key_file_path),
+                "-p",
+                str(path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        stderr = exc.stderr.strip() or exc.stdout.strip() or str(exc)
+        raise RuntimeError(f"Sparkle sign_update failed for {asset.name}: {stderr}") from exc
+    finally:
+        try:
+            key_file_path.unlink()
+        except OSError:
+            pass
+
+    signature = result.stdout.strip()
+    if not signature:
+        raise RuntimeError(f"Sparkle sign_update returned an empty signature for {asset.name}")
+    return signature
 
 
 def render_appcast(
@@ -396,15 +456,33 @@ def main() -> int:
         action="store_true",
         help="Fail if no Sparkle private key is available",
     )
+    parser.add_argument(
+        "--sparkle-sign-update-bin",
+        default=None,
+        help="Optional path to Sparkle's sign_update tool for signing appcasts using Sparkle-native key handling",
+    )
     args = parser.parse_args()
 
     github_token = args.github_token or os.environ.get("GITHUB_TOKEN")
     signing_secret = args.sparkle_private_key or os.environ.get(
         "SPARKLE_PRIVATE_ED_KEY"
     )
-    private_key = load_signing_key(signing_secret)
+    sign_update_bin_value = args.sparkle_sign_update_bin or os.environ.get(
+        "SPARKLE_SIGN_UPDATE_BIN"
+    )
+    sign_update_bin = Path(sign_update_bin_value).expanduser() if sign_update_bin_value else None
+    if sign_update_bin is not None and not sign_update_bin.exists():
+        raise RuntimeError(f"Sparkle sign_update tool was not found at {sign_update_bin}")
 
-    if args.require_signatures and private_key is None:
+    decoded_signing_secret = decode_signing_secret(signing_secret)
+    normalized_signing_secret = (
+        decoded_signing_secret[0] if decoded_signing_secret is not None else None
+    )
+    private_key = None
+    if sign_update_bin is None:
+        private_key = load_signing_key(signing_secret)
+
+    if args.require_signatures and normalized_signing_secret is None:
         raise RuntimeError(
             "Missing Sparkle private key. Set SPARKLE_PRIVATE_ED_KEY or --sparkle-private-key."
         )
@@ -454,7 +532,26 @@ def main() -> int:
     beta_notes = extract_notes(args.changelog, beta_track.tag_name)
 
     signatures: dict[str, str] = {}
-    if private_key is not None:
+    if normalized_signing_secret is not None and sign_update_bin is not None:
+        with tempfile.TemporaryDirectory(
+            prefix="dockmint-sparkle-sign-"
+        ) as temp_dir:
+            cache_dir = Path(temp_dir)
+            unique_assets = {
+                stable_arm_asset.name: stable_arm_asset,
+                stable_x64_asset.name: stable_x64_asset,
+                beta_arm_asset.name: beta_arm_asset,
+                beta_x64_asset.name: beta_x64_asset,
+            }
+            for asset in unique_assets.values():
+                signatures[asset.name] = sign_asset_with_sparkle_tool(
+                    asset,
+                    normalized_signing_secret,
+                    sign_update_bin,
+                    cache_dir,
+                    github_token=github_token,
+                )
+    elif private_key is not None:
         with tempfile.TemporaryDirectory(
             prefix="dockmint-sparkle-sign-"
         ) as temp_dir:
