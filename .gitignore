@@ -4,6 +4,8 @@ logs/*
 **/xcuserdata/
 tools/artifacts/
 .build/
+.derivedData/
 dist/
+output/
 __pycache__/
 **/__pycache__/
