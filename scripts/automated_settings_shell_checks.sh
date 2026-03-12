@@ -6,6 +6,7 @@ source "$SCRIPT_DIR/lib/test_common.sh"
 
 run_test_preflight false
 capture_dock_state
+ensure_no_docktor
 
 cleanup() {
   stop_docktor
