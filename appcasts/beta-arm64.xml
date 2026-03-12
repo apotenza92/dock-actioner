@@ -5,22 +5,19 @@
     <description>Docktor update feed (beta channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.2.0</title>
-      <link>https://github.com/apotenza92/docktor/releases/tag/v0.2.0</link>
-      <sparkle:version>200090000</sparkle:version>
-      <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+      <title>Version 0.2.1</title>
+      <link>https://github.com/apotenza92/docktor/releases/tag/v0.2.1</link>
+      <sparkle:version>200190000</sparkle:version>
+      <sparkle:shortVersionString>0.2.1</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/docktor/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Redesigned Settings into a single compact scrollable window with inline section headers, right-aligned reset actions, richer update status text, and expanded Folder Actions controls.
-- Added configurable folder-stack click and scroll actions, including Dock passthrough, Finder opening with view/group/sort options, and custom “Open With” app targets with async app-list warming.
-- Improved settings responsiveness with instrumented internal timing logs, fixed pane sizing, shared settings services, and a local benchmark harness for reproducible settings timing runs.
-- Hardened Dock hit testing and gesture routing with folder Dock item detection, alternate-axis scroll handling, and drag-path changes that preserve native Dock drag/reorder/drop behavior while reducing drag-start stutter.
-- Improved launch/runtime robustness across Docktor-family installs, update-state reporting, and macOS 14 compatibility by removing deprecated activation calls and tightening main-actor isolation around workspace/private-window APIs.
-- Added coverage and tooling updates for the new Dock hit-test and scroll decision paths, plus Xcode-aware Debug app resolution in shared test helpers and developer docs.]]></description>
-      <pubDate>Thu, 12 Mar 2026 01:04:14 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.2.0/Docktor-Beta-v0.2.0-macos-arm64.zip"
-                 sparkle:edSignature="ysE3fj8M1RMR7HuIb6YRGBmAVLazDQ3ZXO6XARp33TTc89GeUuDsz1ogjuxOsKQblzSDXBLNsEw23Wt/DXEeAA=="
-                 length="2784812"
+      <description sparkle:format="plain-text"><![CDATA[- Polished the single-window Settings layout with tighter top-column balancing, clearer section hierarchy, compact permissions rows, and action-table sizing tweaks that remove truncation in common controls.
+- Cleaned up update messaging in Settings by showing the short version only and mapping Sparkle "no update found" and cancelled checks to user-friendly status text.
+- Restricted duplicate-instance termination to Debug builds so release builds no longer interfere with Sparkle relaunch/update flows.]]></description>
+      <pubDate>Thu, 12 Mar 2026 02:03:08 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/docktor/releases/download/v0.2.1/Docktor-Beta-v0.2.1-macos-arm64.zip"
+                 sparkle:edSignature="KjXImE0ZsbaZr9wvAUWggEtVZLolU4E4MnmXT46FiUSQwN3bhTYD2vYKVBWho9s7tMXp9usXrEEgwrAUXOqRDQ=="
+                 length="2783416"
                  type="application/octet-stream" />
     </item>
   </channel>
