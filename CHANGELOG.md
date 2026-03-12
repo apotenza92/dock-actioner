@@ -7,6 +7,12 @@ All notable changes to this project are documented in this file (stable and beta
 - Ongoing development.
 - Added a documented multi-release Docktor -> Dockmint rollout runbook plus release-time validation for migration phase, legacy appcast mirroring, and canonical `apotenza92/dockmint` release origin checks.
 
+## [v0.2.2-beta.2]
+
+- Reissued the Dockmint beta as the planned transition build so existing `Docktor Beta` installs can upgrade in place before the later bundle-identifier cleanup release.
+- Kept the Dockmint branding and beta release channel while restoring update compatibility for legacy `pzc.Dockter.beta` installs.
+- Corrected the GitHub release configuration to use the original Dockmint Sparkle signing key for future appcast publication.
+
 ## [v0.2.2-beta.1]
 
 - Restored Dockmint beta release continuity after the repository rename by publishing the beta channel from the live `apotenza92/dockmint` repo and aligning release metadata with Dockmint bundle/update paths.
