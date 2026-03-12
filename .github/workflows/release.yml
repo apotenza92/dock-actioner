@@ -673,9 +673,9 @@ jobs:
           set -euo pipefail
           cd /tmp/homebrew-tap
 
-          git add -A Casks/dockmint.rb Casks/dockmint@beta.rb Casks/docktor.rb Casks/docktor@beta.rb
+          git add -A Casks
 
-          if git diff --cached --quiet -- Casks/dockmint.rb Casks/dockmint@beta.rb Casks/docktor.rb Casks/docktor@beta.rb; then
+          if git diff --cached --quiet -- Casks; then
             echo "No Homebrew cask changes to push."
             exit 0
           fi
