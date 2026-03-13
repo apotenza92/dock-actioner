@@ -5,19 +5,22 @@
     <description>Dockmint update feed (beta channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.2.3</title>
-      <link>https://github.com/apotenza92/dockmint/releases/tag/v0.2.3</link>
-      <sparkle:version>200390000</sparkle:version>
-      <sparkle:shortVersionString>0.2.3</sparkle:shortVersionString>
+      <title>Version 0.2.4</title>
+      <link>https://github.com/apotenza92/dockmint/releases/tag/v0.2.4</link>
+      <sparkle:version>200490000</sparkle:version>
+      <sparkle:shortVersionString>0.2.4</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/dockmint/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Cut over the shipped stable and beta app identities to the final Dockmint bundle identifiers, `pzc.Dockmint` and `pzc.Dockmint.beta`, while keeping one overlap release of legacy Docktor feed mirroring and Homebrew aliases for existing installs.
-- Switched cleanup-phase packaged update feeds to the canonical `apotenza92/dockmint` appcasts so post-migration Dockmint builds no longer point at the legacy Docktor repository.
-- Fixed GitHub release appcast signing to use Sparkle's native `sign_update` tool, restoring compatibility with legacy exported Sparkle signing-key formats during automated releases.]]></description>
-      <pubDate>Thu, 12 Mar 2026 12:14:22 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/dockmint/releases/download/v0.2.3/Dockmint-Beta-v0.2.3-macos-arm64.zip"
-                 sparkle:edSignature="mzOxojo3oXp1IAAc3KnTKQ4vpkxd5f8FNUg+cWhdfO17D3FzW42viLetY7MJD9otg3jKXig1I/aO642ziEroAw=="
-                 length="2708678"
+      <description sparkle:format="plain-text"><![CDATA[- Changed the default plain Dock folder-stack click action to Finder passthrough (`Open With = Finder`, `View = Finder Default`) so fresh installs and Reset Folder Actions preserve Finder’s own remembered window, view, group, and sort state.
+- Added a one-time migration that rewrites only the exact legacy plain-click default (`Dock` + automatic view, no group/sort overrides) to the new Finder passthrough default, leaving intentional custom folder actions untouched.
+- Clarified Folder Actions settings copy so Finder Default is explicitly presented as Finder-managed behavior, while explicit Finder view/group/sort selections remain available as Dockmint-controlled overrides.
+- Added folder-action decision coverage and extra debug diagnostics around folder-click hit detection, pending-state lifecycle, neutral mouse-up recovery, and executor route selection.
+- Hardened Finder-default folder clicks so delayed synthetic release events no longer wipe newer in-flight clicks, missed folder mouse-ups can be recovered by a watchdog, plain Finder-default clicks now reuse an already-open Finder window for that folder instead of reopening it, and fresh-open stress testing now passes reliably.
+- Added a documented multi-release Docktor -> Dockmint rollout runbook plus release-time validation for migration phase, legacy appcast mirroring, and canonical `apotenza92/dockmint` release origin checks.]]></description>
+      <pubDate>Fri, 13 Mar 2026 03:32:09 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/dockmint/releases/download/v0.2.4/Dockmint-Beta-v0.2.4-macos-arm64.zip"
+                 sparkle:edSignature="QMlIBxYE32lGcwpa4pNrKJnLtdIIVgakkfcFYtEHzdXBLf1PeIt+JtWea3BUXCfodiQZsT+mB5JTTpyWeTI5Dw=="
+                 length="2716148"
                  type="application/octet-stream" />
     </item>
   </channel>
