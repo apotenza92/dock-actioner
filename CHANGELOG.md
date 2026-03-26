@@ -6,6 +6,11 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
+## [v0.3.0]
+
+- Fixed the shipped `Shift+Option+click` quit path so consumed modifier clicks now intercept on mouse-down instead of leaving the Dock press alive long enough to open the Dock item context menu.
+- Restored the internal click-action lookup used by Dockmint's double-click preservation and consumed-click timing paths, and added decision coverage for the consumed modifier click watchdog behavior.
+
 ## [v0.2.9]
 
 - Reverted the experimental cross-space and App Exposé work back to the stable `v0.2.8` baseline.

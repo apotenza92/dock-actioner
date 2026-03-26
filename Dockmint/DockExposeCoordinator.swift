@@ -66,6 +66,7 @@ final class DockExposeCoordinator: ObservableObject {
     private var deferredPlainFirstClickTokenCounter: UInt64 = 0
     private let appExposeDismissGraceWindow: TimeInterval = 0
     private let exposeTrackingExpiryWindow: TimeInterval = 0.9
+    private let consumedModifierClickWatchdogDelay: TimeInterval = 0.16
 
     init(preferences: Preferences) {
         self.preferences = preferences
@@ -914,14 +915,30 @@ final class DockExposeCoordinator: ObservableObject {
         return DockDecisionEngine.shouldRecoverDockPressedState(after: decisionAction(from: action))
     }
 
+    private func shouldFinishConsumedModifierClickEarly(for context: PendingClickContext) -> Bool {
+        let modifier = modifierCombination(from: context.flags)
+        let action = firstClickModifierAction(for: modifier)
+        let isDeferredForDoubleClick = shouldDeferModifierFirstClickAction(
+            action: action,
+            bundleIdentifier: context.clickedBundle,
+            flags: context.flags,
+            frontmostBefore: context.frontmostBefore
+        )
+
+        return DockDecisionEngine.shouldFinishConsumedModifierClickBeforeMouseUp(
+            consumeClick: context.consumeClick,
+            action: decisionAction(from: action),
+            hasModifier: modifier != .none,
+            isDeferredForDoubleClick: isDeferredForDoubleClick
+        )
+    }
+
     private func shouldConsumeMouseDown(for context: PendingClickContext) -> Bool {
-        _ = context
-        return false
+        shouldFinishConsumedModifierClickEarly(for: context)
     }
 
     private func shouldScheduleConsumedFollowUpClickWatchdog(for context: PendingClickContext) -> Bool {
-        _ = context
-        return false
+        shouldFinishConsumedModifierClickEarly(for: context)
     }
 
     private func shouldRecoverStalePendingAsFirstClickActivatePassThrough(_ context: PendingClickContext,
@@ -1412,12 +1429,34 @@ final class DockExposeCoordinator: ObservableObject {
         AppExposeSlotKey.make(source: AppExposeSlotSource.firstClick.rawValue, modifier: modifier.rawValue)
     }
 
+    private func firstClickModifierAction(for modifier: ModifierCombination) -> DockAction {
+        switch modifier {
+        case .shift:
+            return preferences.firstClickShiftAction
+        case .option:
+            return preferences.firstClickOptionAction
+        case .shiftOption:
+            return preferences.firstClickShiftOptionAction
+        case .none:
+            return .none
+        }
+    }
+
     private func configuredAction(for source: ActionSource, flags: CGEventFlags) -> DockAction {
         switch source {
         case .click:
-            // App-icon clickAction-style mappings are legacy-only and no longer participate
-            // in live decision making. Single-click behavior is driven by firstClick* settings.
-            return .none
+            // Click mappings still participate in the legacy/double-click preservation paths.
+            // First-click behavior itself is chosen separately via firstClick* settings.
+            switch modifierCombination(from: flags) {
+            case .none:
+                return preferences.clickAction
+            case .shift:
+                return preferences.shiftClickAction
+            case .option:
+                return preferences.optionClickAction
+            case .shiftOption:
+                return preferences.shiftOptionClickAction
+            }
         case .scrollUp:
             switch modifierCombination(from: flags) {
             case .none:
@@ -1653,17 +1692,7 @@ final class DockExposeCoordinator: ObservableObject {
             return false
         }
 
-        let action: DockAction
-        switch modifier {
-        case .shift:
-            action = preferences.firstClickShiftAction
-        case .option:
-            action = preferences.firstClickOptionAction
-        case .shiftOption:
-            action = preferences.firstClickShiftOptionAction
-        case .none:
-            action = .none
-        }
+        let action = firstClickModifierAction(for: modifier)
 
         if action == .appExpose {
             let slot = firstClickSlotKey(for: modifier)
@@ -2135,17 +2164,7 @@ final class DockExposeCoordinator: ObservableObject {
 
         guard isRunning else { return false }
 
-        let action: DockAction
-        switch modifier {
-        case .shift:
-            action = preferences.firstClickShiftAction
-        case .option:
-            action = preferences.firstClickOptionAction
-        case .shiftOption:
-            action = preferences.firstClickShiftOptionAction
-        case .none:
-            action = .none
-        }
+        let action = firstClickModifierAction(for: modifier)
 
         let canRunAppExpose: Bool
         if action == .appExpose {
@@ -2435,7 +2454,7 @@ final class DockExposeCoordinator: ObservableObject {
 
     private func scheduleConsumedFollowUpClickWatchdog(context: PendingClickContext,
                                                        watchdogToken: UInt64) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + consumedModifierClickWatchdogDelay) { [weak self] in
             guard let self else { return }
             guard watchdogToken == self.consumedFollowUpClickWatchdogTokenCounter else { return }
             guard self.pendingClickContext?.clickSequence == context.clickSequence else { return }

@@ -251,6 +251,44 @@ final class DockDecisionEngineXCTest: XCTestCase {
         )
     }
 
+    func testConsumedModifierClickWatchdogRules() {
+        XCTAssertTrue(
+            DockDecisionEngine.shouldFinishConsumedModifierClickBeforeMouseUp(
+                consumeClick: true,
+                action: .quitApp,
+                hasModifier: true,
+                isDeferredForDoubleClick: false
+            )
+        )
+
+        XCTAssertFalse(
+            DockDecisionEngine.shouldFinishConsumedModifierClickBeforeMouseUp(
+                consumeClick: true,
+                action: .appExpose,
+                hasModifier: true,
+                isDeferredForDoubleClick: false
+            )
+        )
+
+        XCTAssertFalse(
+            DockDecisionEngine.shouldFinishConsumedModifierClickBeforeMouseUp(
+                consumeClick: true,
+                action: .quitApp,
+                hasModifier: true,
+                isDeferredForDoubleClick: true
+            )
+        )
+
+        XCTAssertFalse(
+            DockDecisionEngine.shouldFinishConsumedModifierClickBeforeMouseUp(
+                consumeClick: true,
+                action: .quitApp,
+                hasModifier: false,
+                isDeferredForDoubleClick: false
+            )
+        )
+    }
+
     func testEffectiveScrollDeltaCanFlipDiscreteDirectionOnly() {
         XCTAssertEqual(
             DockDecisionEngine.effectiveScrollDelta(

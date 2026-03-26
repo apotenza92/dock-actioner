@@ -156,6 +156,36 @@ func runDecisionEngineTests() {
         "modifier action should pass through when app not running"
     )
 
+    expect(
+        DockDecisionEngine.shouldFinishConsumedModifierClickBeforeMouseUp(
+            consumeClick: true,
+            action: .quitApp,
+            hasModifier: true,
+            isDeferredForDoubleClick: false
+        ) == true,
+        "consumed modifier quit should finish before mouse-up"
+    )
+
+    expect(
+        DockDecisionEngine.shouldFinishConsumedModifierClickBeforeMouseUp(
+            consumeClick: true,
+            action: .appExpose,
+            hasModifier: true,
+            isDeferredForDoubleClick: false
+        ) == false,
+        "modifier appExpose should not finish early"
+    )
+
+    expect(
+        DockDecisionEngine.shouldFinishConsumedModifierClickBeforeMouseUp(
+            consumeClick: true,
+            action: .quitApp,
+            hasModifier: true,
+            isDeferredForDoubleClick: true
+        ) == false,
+        "deferred modifier clicks should not finish early"
+    )
+
     // shouldConsumeActiveClickAction
     expect(
         DockDecisionEngine.shouldConsumeActiveClickAction(

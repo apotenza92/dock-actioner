@@ -151,6 +151,28 @@ enum DockDecisionEngine {
         return !opensInDock
     }
 
+    static func shouldFinishConsumedModifierClickBeforeMouseUp(consumeClick: Bool,
+                                                               action: DecisionDockAction,
+                                                               hasModifier: Bool,
+                                                               isDeferredForDoubleClick: Bool) -> Bool {
+        guard consumeClick else { return false }
+        guard hasModifier else { return false }
+        guard !isDeferredForDoubleClick else { return false }
+
+        switch action {
+        case .none, .appExpose:
+            return false
+        case .activateApp,
+             .hideApp,
+             .minimizeAll,
+             .quitApp,
+             .bringAllToFront,
+             .hideOthers,
+             .singleAppMode:
+            return true
+        }
+    }
+
     static func resolvedScrollDelta(primaryAxis: DecisionScrollAxisDelta,
                                     alternateAxis: DecisionScrollAxisDelta? = nil,
                                     isContinuous: Bool,
