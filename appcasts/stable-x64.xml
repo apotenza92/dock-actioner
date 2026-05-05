@@ -5,17 +5,18 @@
     <description>Dockmint update feed (stable channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.3.2</title>
-      <link>https://github.com/apotenza92/dockmint/releases/tag/v0.3.2</link>
-      <sparkle:version>300290000</sparkle:version>
-      <sparkle:shortVersionString>0.3.2</sparkle:shortVersionString>
+      <title>Version 0.3.3</title>
+      <link>https://github.com/apotenza92/dockmint/releases/tag/v0.3.3</link>
+      <sparkle:version>300390000</sparkle:version>
+      <sparkle:shortVersionString>0.3.3</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/dockmint/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Fixed the generated stable and beta app icon PNG exports to match the exact asset catalogue slot sizes again, which restores the shipped Finder and Applications icon after updating.]]></description>
-      <pubDate>Thu, 09 Apr 2026 06:28:03 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/dockmint/releases/download/v0.3.2/Dockmint-v0.3.2-macos-x64.zip"
-                 sparkle:edSignature="ADdivNNvsTDuZEOrrk5qZXSaBj6Sr29U2dyHxWaaHtNQaqngHstETDEIv5NyLpDXdhx6u6rE1R7NA+digXOaAg=="
-                 length="2964389"
+      <description sparkle:format="plain-text"><![CDATA[- Added a `Reverse mouse scroll direction` setting for mouse-wheel scroll actions, with first-run and Settings suggestions for users of tools like LinearMouse, Mos, and UnnaturalScrollWheels while leaving trackpad gestures unchanged.
+- Improved Dock scroll direction diagnostics and routing so remapped mouse-wheel actions can be corrected explicitly, and set both default no-modifier app-icon scroll directions to App Exposé.]]></description>
+      <pubDate>Tue, 05 May 2026 02:57:29 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/dockmint/releases/download/v0.3.3/Dockmint-v0.3.3-macos-x64.zip"
+                 sparkle:edSignature="SobV01amOcDguNY8Xp/VO9iIkduTJc1FMG9pCy256pbO8Qkhep9CG2QEME7zy2NFVRY3TvO6qaxoJ8KqVBtYAw=="
+                 length="2978409"
                  type="application/octet-stream" />
     </item>
   </channel>
