@@ -602,6 +602,33 @@ enum OnboardingMilestone: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+struct MouseScrollDirectionTool: Equatable, Identifiable {
+    let id: String
+    let displayName: String
+    let bundleIdentifier: String?
+    let nameNeedle: String
+}
+
+enum MouseScrollDirectionToolDetector {
+    static let knownTools: [MouseScrollDirectionTool] = [
+        MouseScrollDirectionTool(id: "linearmouse", displayName: "LinearMouse", bundleIdentifier: "com.lujjjh.LinearMouse", nameNeedle: "linearmouse"),
+        MouseScrollDirectionTool(id: "mos", displayName: "Mos", bundleIdentifier: "com.caldis.Mos", nameNeedle: "mos"),
+        MouseScrollDirectionTool(id: "unnaturalscrollwheels", displayName: "UnnaturalScrollWheels", bundleIdentifier: nil, nameNeedle: "unnaturalscrollwheels"),
+    ]
+
+    static func detectedTools(workspace: NSWorkspace = .shared) -> [MouseScrollDirectionTool] {
+        let runningApplications = workspace.runningApplications
+        return knownTools.filter { tool in
+            runningApplications.contains { app in
+                let bundle = app.bundleIdentifier?.lowercased() ?? ""
+                let name = app.localizedName?.lowercased() ?? ""
+                return bundle.contains(tool.nameNeedle) || name.contains(tool.nameNeedle)
+            }
+            || tool.bundleIdentifier.map { workspace.urlForApplication(withBundleIdentifier: $0) != nil } == true
+        }
+    }
+}
+
 enum AppExposeSlotSource: String {
     case click
     case firstClick
@@ -656,6 +683,9 @@ final class Preferences: ObservableObject {
     private let optionScrollUpActionKey = "optionScrollUpAction"
     private let shiftOptionScrollUpActionKey = "shiftOptionScrollUpAction"
     private let scrollDownActionKey = "scrollDownAction"
+    private let reverseMouseScrollActionsKey = "invertDiscreteScrollDirection"
+    private let dismissedMouseScrollToolSuggestionIDsKey = "dismissedMouseScrollToolSuggestionIDs"
+    private let seenMouseScrollToolSuggestionIDsKey = "seenMouseScrollToolSuggestionIDs"
     private let shiftScrollDownActionKey = "shiftScrollDownAction"
     private let optionScrollDownActionKey = "optionScrollDownAction"
     private let shiftOptionScrollDownActionKey = "shiftOptionScrollDownAction"
@@ -775,11 +805,11 @@ final class Preferences: ObservableObject {
         shiftClickAction: .none,
         optionClickAction: .none,
         shiftOptionClickAction: .none,
-        scrollUpAction: .none,
+        scrollUpAction: .appExpose,
         shiftScrollUpAction: .none,
         optionScrollUpAction: .none,
         shiftOptionScrollUpAction: .none,
-        scrollDownAction: .none,
+        scrollDownAction: .appExpose,
         shiftScrollDownAction: .none,
         optionScrollDownAction: .none,
         shiftOptionScrollDownAction: .none
@@ -1021,6 +1051,24 @@ final class Preferences: ObservableObject {
         }
     }
 
+    @Published var reverseMouseScrollActions: Bool {
+        didSet {
+            userDefaults.set(reverseMouseScrollActions, forKey: reverseMouseScrollActionsKey)
+        }
+    }
+
+    @Published private(set) var dismissedMouseScrollToolSuggestionIDs: Set<String> {
+        didSet {
+            userDefaults.set(Array(dismissedMouseScrollToolSuggestionIDs).sorted(), forKey: dismissedMouseScrollToolSuggestionIDsKey)
+        }
+    }
+
+    @Published private(set) var seenMouseScrollToolSuggestionIDs: Set<String> {
+        didSet {
+            userDefaults.set(Array(seenMouseScrollToolSuggestionIDs).sorted(), forKey: seenMouseScrollToolSuggestionIDsKey)
+        }
+    }
+
     @Published var shiftScrollDownAction: DockAction {
         didSet {
             userDefaults.set(shiftScrollDownAction.rawValue, forKey: shiftScrollDownActionKey)
@@ -1164,6 +1212,30 @@ final class Preferences: ObservableObject {
 
     var shouldPresentOnboarding: Bool {
         !isOnboardingCompleted
+    }
+
+    func shouldSuggestReverseMouseScrollDuringOnboarding(for tool: MouseScrollDirectionTool) -> Bool {
+        !reverseMouseScrollActions && !dismissedMouseScrollToolSuggestionIDs.contains(tool.id)
+    }
+
+    func shouldSuggestReverseMouseScrollAfterOnboarding(for tool: MouseScrollDirectionTool) -> Bool {
+        !reverseMouseScrollActions
+            && !dismissedMouseScrollToolSuggestionIDs.contains(tool.id)
+            && !seenMouseScrollToolSuggestionIDs.contains(tool.id)
+    }
+
+    func markMouseScrollToolSuggestionSeen(for tool: MouseScrollDirectionTool) {
+        seenMouseScrollToolSuggestionIDs.insert(tool.id)
+    }
+
+    func dismissMouseScrollToolSuggestion(for tool: MouseScrollDirectionTool) {
+        dismissedMouseScrollToolSuggestionIDs.insert(tool.id)
+        seenMouseScrollToolSuggestionIDs.insert(tool.id)
+    }
+
+    func enableReverseMouseScrollActionsFromSuggestion(for tool: MouseScrollDirectionTool) {
+        markMouseScrollToolSuggestionSeen(for: tool)
+        reverseMouseScrollActions = true
     }
 
     private init(userDefaults: UserDefaults = .standard,
@@ -1336,6 +1408,9 @@ final class Preferences: ObservableObject {
         let shiftFolderScrollUpAction = Self.loadFolderAction(from: userDefaults, forKey: shiftFolderScrollUpActionKey) ?? folderDefaults.shiftScrollUp
         let optionFolderScrollUpAction = Self.loadFolderAction(from: userDefaults, forKey: optionFolderScrollUpActionKey) ?? folderDefaults.optionScrollUp
         let shiftOptionFolderScrollUpAction = Self.loadFolderAction(from: userDefaults, forKey: shiftOptionFolderScrollUpActionKey) ?? folderDefaults.shiftOptionScrollUp
+        let reverseMouseScrollActions = userDefaults.bool(forKey: reverseMouseScrollActionsKey)
+        let dismissedMouseScrollToolSuggestionIDs = Set(userDefaults.stringArray(forKey: dismissedMouseScrollToolSuggestionIDsKey) ?? [])
+        let seenMouseScrollToolSuggestionIDs = Set(userDefaults.stringArray(forKey: seenMouseScrollToolSuggestionIDsKey) ?? [])
         let folderScrollDownAction = Self.loadFolderAction(from: userDefaults, forKey: folderScrollDownActionKey) ?? folderDefaults.scrollDown
         let shiftFolderScrollDownAction = Self.loadFolderAction(from: userDefaults, forKey: shiftFolderScrollDownActionKey) ?? folderDefaults.shiftScrollDown
         let optionFolderScrollDownAction = Self.loadFolderAction(from: userDefaults, forKey: optionFolderScrollDownActionKey) ?? folderDefaults.optionScrollDown
@@ -1535,6 +1610,9 @@ final class Preferences: ObservableObject {
         self.optionFolderScrollUpAction = optionFolderScrollUpAction
         self.shiftOptionFolderScrollUpAction = shiftOptionFolderScrollUpAction
         self.scrollDownAction = scrollDownAction
+        self.reverseMouseScrollActions = reverseMouseScrollActions
+        self.dismissedMouseScrollToolSuggestionIDs = dismissedMouseScrollToolSuggestionIDs
+        self.seenMouseScrollToolSuggestionIDs = seenMouseScrollToolSuggestionIDs
         self.shiftScrollDownAction = shiftScrollDownAction
         self.optionScrollDownAction = optionScrollDownAction
         self.shiftOptionScrollDownAction = shiftOptionScrollDownAction

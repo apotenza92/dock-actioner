@@ -37,6 +37,7 @@ struct OnboardingView: View {
                     header
                     permissionsSection
                     loginItemSection
+                    detectedMouseScrollToolSection
                     updatesSection
                     footerActions
                 }
@@ -96,6 +97,28 @@ struct OnboardingView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var detectedMouseScrollToolSection: some View {
+        if let tool = MouseScrollDirectionToolDetector.detectedTools().first(where: { preferences.shouldSuggestReverseMouseScrollDuringOnboarding(for: $0) }) {
+            onboardingSection(
+                title: "Mouse Scroll Direction",
+                description: "Detected \(tool.displayName). If you use LinearMouse, Mos, UnnaturalScrollWheels, or a similar app to reverse your mouse's scrolling direction, turn this on so Dockmint's Scroll Up and Scroll Down actions match your mouse. Trackpad and other continuous scrolling gestures keep following macOS behavior."
+            ) {
+                HStack(spacing: 8) {
+                    Button("Turn On Reverse Mouse Scroll Direction") {
+                        preferences.enableReverseMouseScrollActionsFromSuggestion(for: tool)
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("Not Now") {
+                        preferences.dismissMouseScrollToolSuggestion(for: tool)
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
         }
     }
@@ -178,6 +201,9 @@ struct OnboardingView: View {
                 Spacer()
 
                 Button("Done") {
+                    for tool in MouseScrollDirectionToolDetector.detectedTools() {
+                        preferences.markMouseScrollToolSuggestionSeen(for: tool)
+                    }
                     preferences.completeOnboarding()
                     NSApp.keyWindow?.close()
                 }

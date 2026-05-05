@@ -373,21 +373,10 @@ final class DockDecisionEngineXCTest: XCTestCase {
         )
     }
 
-    func testAutoDiscreteInvertHeuristic() {
+    func testDiscreteInvertUsesUserPreferenceOnlyAndNeverContinuousEvents() {
         XCTAssertFalse(
             DockDecisionEngine.shouldInvertDiscreteScrollDirection(
                 isContinuous: true,
-                sourceBundleIdentifier: "com.caldis.Mos",
-                knownRemapperRunning: true,
-                userOverride: false
-            )
-        )
-
-        XCTAssertTrue(
-            DockDecisionEngine.shouldInvertDiscreteScrollDirection(
-                isContinuous: false,
-                sourceBundleIdentifier: nil,
-                knownRemapperRunning: false,
                 userOverride: true
             )
         )
@@ -395,28 +384,224 @@ final class DockDecisionEngineXCTest: XCTestCase {
         XCTAssertTrue(
             DockDecisionEngine.shouldInvertDiscreteScrollDirection(
                 isContinuous: false,
-                sourceBundleIdentifier: "com.caldis.Mos",
-                knownRemapperRunning: false,
-                userOverride: false
-            )
-        )
-
-        XCTAssertTrue(
-            DockDecisionEngine.shouldInvertDiscreteScrollDirection(
-                isContinuous: false,
-                sourceBundleIdentifier: nil,
-                knownRemapperRunning: true,
-                userOverride: false
+                userOverride: true
             )
         )
 
         XCTAssertFalse(
             DockDecisionEngine.shouldInvertDiscreteScrollDirection(
                 isContinuous: false,
-                sourceBundleIdentifier: nil,
-                knownRemapperRunning: false,
                 userOverride: false
             )
+        )
+    }
+
+    func testAppKitInterpretedDiscreteDeltaUsesUserControlledReverseMapping() {
+        let delta = DockDecisionEngine.resolvedScrollDeltaWithSource(
+            primaryAxis: DecisionScrollAxisDelta(
+                pointDelta: -12,
+                fixedDelta: -1,
+                coarseDelta: -1,
+                appKitDelta: 6
+            ),
+            isContinuous: false
+        )
+
+        XCTAssertEqual(delta.source, .appKit)
+        XCTAssertTrue(
+            DockDecisionEngine.shouldInvertDiscreteScrollDirection(
+                isContinuous: false,
+                userOverride: true
+            )
+        )
+        XCTAssertFalse(
+            DockDecisionEngine.shouldApplyDiscreteScrollInversion(
+                isContinuous: false,
+                invertDiscreteDirection: true,
+                deltaSource: delta.source
+            )
+        )
+        XCTAssertEqual(
+            DockDecisionEngine.effectiveScrollDelta(
+                delta: delta,
+                isContinuous: false,
+                invertDiscreteDirection: true
+            ),
+            6
+        )
+        XCTAssertEqual(
+            DockDecisionEngine.resolvedScrollDirection(
+                delta: delta,
+                appKitInterpretedUsesContentDirection: true
+            ),
+            .down
+        )
+    }
+
+    func testNegativeAppKitInterpretedDiscreteDeltaIsNotDoubleInvertedForKnownRemapper() {
+        let delta = DockDecisionEngine.resolvedScrollDeltaWithSource(
+            primaryAxis: DecisionScrollAxisDelta(
+                pointDelta: 12,
+                fixedDelta: 1,
+                coarseDelta: 1,
+                appKitDelta: -6
+            ),
+            isContinuous: false
+        )
+
+        XCTAssertEqual(delta.source, .appKit)
+        XCTAssertEqual(
+            DockDecisionEngine.effectiveScrollDelta(
+                delta: delta,
+                isContinuous: false,
+                invertDiscreteDirection: true
+            ),
+            -6
+        )
+        XCTAssertEqual(
+            DockDecisionEngine.resolvedScrollDirection(
+                delta: delta,
+                appKitInterpretedUsesContentDirection: true
+            ),
+            .up
+        )
+    }
+
+    func testRawFallbackScrollDirectionKeepsLegacySignConvention() {
+        let delta = ResolvedScrollDelta(value: 6, source: .discreteFallbackFixed)
+
+        XCTAssertEqual(
+            DockDecisionEngine.resolvedScrollDirection(
+                delta: delta,
+                appKitInterpretedUsesContentDirection: false
+            ),
+            .up
+        )
+    }
+
+    func testAppKitInterpretedDeltaKeepsLegacySignConventionWithoutRemapperDirectionRequest() {
+        let delta = ResolvedScrollDelta(value: 6, source: .appKit)
+
+        XCTAssertEqual(
+            DockDecisionEngine.resolvedScrollDirection(
+                delta: delta,
+                appKitInterpretedUsesContentDirection: false
+            ),
+            .up
+        )
+    }
+
+    func testUserOverrideDoesNotInvertAppKitInterpretedDelta() {
+        let delta = DockDecisionEngine.resolvedScrollDeltaWithSource(
+            primaryAxis: DecisionScrollAxisDelta(
+                pointDelta: -12,
+                fixedDelta: -1,
+                coarseDelta: -1,
+                appKitDelta: 6
+            ),
+            isContinuous: false
+        )
+
+        XCTAssertTrue(
+            DockDecisionEngine.shouldInvertDiscreteScrollDirection(
+                isContinuous: false,
+                userOverride: true
+            )
+        )
+        XCTAssertFalse(
+            DockDecisionEngine.shouldApplyDiscreteScrollInversion(
+                isContinuous: false,
+                invertDiscreteDirection: true,
+                deltaSource: delta.source
+            )
+        )
+        XCTAssertEqual(
+            DockDecisionEngine.effectiveScrollDelta(
+                delta: delta,
+                isContinuous: false,
+                invertDiscreteDirection: true
+            ),
+            6
+        )
+    }
+
+    func testRawDiscreteFallbackStillInvertsWhenRemapperDetected() {
+        let delta = DockDecisionEngine.resolvedScrollDeltaWithSource(
+            primaryAxis: DecisionScrollAxisDelta(
+                pointDelta: 0,
+                fixedDelta: 2,
+                coarseDelta: 0,
+                appKitDelta: 0
+            ),
+            isContinuous: false
+        )
+
+        XCTAssertEqual(delta.source, .discreteFallbackFixed)
+        XCTAssertTrue(
+            DockDecisionEngine.shouldApplyDiscreteScrollInversion(
+                isContinuous: false,
+                invertDiscreteDirection: true,
+                deltaSource: delta.source
+            )
+        )
+        XCTAssertEqual(
+            DockDecisionEngine.effectiveScrollDelta(
+                delta: delta,
+                isContinuous: false,
+                invertDiscreteDirection: true
+            ),
+            -2
+        )
+    }
+
+    func testContinuousDeltaDoesNotInvertEvenWhenRemapperDetected() {
+        let delta = DockDecisionEngine.resolvedScrollDeltaWithSource(
+            primaryAxis: DecisionScrollAxisDelta(
+                pointDelta: 8,
+                fixedDelta: 1,
+                coarseDelta: 1,
+                appKitDelta: 0
+            ),
+            isContinuous: true
+        )
+
+        XCTAssertEqual(delta.source, .continuousPoint)
+        XCTAssertEqual(
+            DockDecisionEngine.effectiveScrollDelta(
+                delta: delta,
+                isContinuous: true,
+                invertDiscreteDirection: true
+            ),
+            8
+        )
+    }
+
+    func testAlternateAxisAppKitDeltaCarriesSourceAndAvoidsRemapperInversion() {
+        let delta = DockDecisionEngine.resolvedScrollDeltaWithSource(
+            primaryAxis: DecisionScrollAxisDelta(
+                pointDelta: 1,
+                fixedDelta: 0,
+                coarseDelta: 0,
+                appKitDelta: 0
+            ),
+            alternateAxis: DecisionScrollAxisDelta(
+                pointDelta: -9,
+                fixedDelta: -1,
+                coarseDelta: -1,
+                appKitDelta: 10
+            ),
+            isContinuous: false,
+            prefersAlternateAxis: true
+        )
+
+        XCTAssertEqual(delta, ResolvedScrollDelta(value: 10, source: .appKit))
+        XCTAssertEqual(
+            DockDecisionEngine.effectiveScrollDelta(
+                delta: delta,
+                isContinuous: false,
+                invertDiscreteDirection: true
+            ),
+            10
         )
     }
 

@@ -120,8 +120,8 @@ if [[ "$(defaults read "$BUNDLE_ID" dockmintDefaultsDomainMigrated_v1 2>/dev/nul
   echo "  FAIL expected dev install flow to avoid legacy defaults-domain migration"
   exit 1
 fi
-assert_pref_equals scrollUpAction none
-assert_pref_equals scrollDownAction none
+assert_pref_equals scrollUpAction appExpose
+assert_pref_equals scrollDownAction appExpose
 assert_pref_equals folderClickAction "$DEFAULT_DOCK_FOLDER_ACTION"
 assert_pref_equals optionFolderClickAction "$DEFAULT_FINDER_FOLDER_ACTION"
 stop_dockmint
@@ -200,8 +200,8 @@ for attempt in 1 2; do
   fi
 done
 
-assert_pref_equals scrollUpAction none
-assert_pref_equals scrollDownAction none
+assert_pref_equals scrollUpAction appExpose
+assert_pref_equals scrollDownAction appExpose
 assert_pref_equals folderClickAction "$DEFAULT_DOCK_FOLDER_ACTION"
 assert_pref_equals optionFolderClickAction "$DEFAULT_FINDER_FOLDER_ACTION"
 

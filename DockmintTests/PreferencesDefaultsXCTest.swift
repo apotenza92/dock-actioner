@@ -82,6 +82,7 @@ final class PreferencesDefaultsXCTest: XCTestCase {
         preferences.optionScrollUpAction = .hideApp
         preferences.shiftOptionScrollUpAction = .quitApp
         preferences.scrollDownAction = .appExpose
+        preferences.reverseMouseScrollActions = true
         preferences.shiftScrollDownAction = .hideApp
         preferences.optionScrollDownAction = .singleAppMode
         preferences.shiftOptionScrollDownAction = .quitApp
@@ -95,6 +96,40 @@ final class PreferencesDefaultsXCTest: XCTestCase {
         XCTAssertEqual(defaults.string(forKey: "firstClickShiftOptionAction"), DockAction.quitApp.rawValue)
         XCTAssertEqual(defaults.string(forKey: "shiftOptionClickAction"), DockAction.none.rawValue)
         XCTAssertEqual(defaults.object(forKey: "clickAppExposeRequiresMultipleWindows") as? Bool, false)
+        XCTAssertEqual(defaults.object(forKey: "invertDiscreteScrollDirection") as? Bool, true)
+        XCTAssertTrue(preferences.reverseMouseScrollActions)
+    }
+
+    func testMouseScrollToolSuggestionStatePersistsAndSuppressesPrompts() {
+        let defaults = isolatedDefaults()
+        let preferences = Preferences(testingUserDefaults: defaults)
+        let tool = MouseScrollDirectionTool(id: "linearmouse", displayName: "LinearMouse", bundleIdentifier: "com.lujjjh.LinearMouse", nameNeedle: "linearmouse")
+
+        XCTAssertTrue(preferences.shouldSuggestReverseMouseScrollDuringOnboarding(for: tool))
+        XCTAssertTrue(preferences.shouldSuggestReverseMouseScrollAfterOnboarding(for: tool))
+
+        preferences.markMouseScrollToolSuggestionSeen(for: tool)
+        XCTAssertTrue(preferences.shouldSuggestReverseMouseScrollDuringOnboarding(for: tool))
+        XCTAssertFalse(preferences.shouldSuggestReverseMouseScrollAfterOnboarding(for: tool))
+        XCTAssertEqual(defaults.stringArray(forKey: "seenMouseScrollToolSuggestionIDs"), ["linearmouse"])
+
+        preferences.dismissMouseScrollToolSuggestion(for: tool)
+        XCTAssertFalse(preferences.shouldSuggestReverseMouseScrollDuringOnboarding(for: tool))
+        XCTAssertFalse(preferences.shouldSuggestReverseMouseScrollAfterOnboarding(for: tool))
+        XCTAssertEqual(defaults.stringArray(forKey: "dismissedMouseScrollToolSuggestionIDs"), ["linearmouse"])
+    }
+
+    func testReverseMouseScrollSuggestionTurnOnEnablesPreference() {
+        let defaults = isolatedDefaults()
+        let preferences = Preferences(testingUserDefaults: defaults)
+        let tool = MouseScrollDirectionTool(id: "linearmouse", displayName: "LinearMouse", bundleIdentifier: "com.lujjjh.LinearMouse", nameNeedle: "linearmouse")
+
+        preferences.enableReverseMouseScrollActionsFromSuggestion(for: tool)
+
+        XCTAssertTrue(preferences.reverseMouseScrollActions)
+        XCTAssertEqual(defaults.object(forKey: "invertDiscreteScrollDirection") as? Bool, true)
+        XCTAssertFalse(preferences.shouldSuggestReverseMouseScrollDuringOnboarding(for: tool))
+        XCTAssertFalse(preferences.shouldSuggestReverseMouseScrollAfterOnboarding(for: tool))
     }
 
     func testLegacyAppDoubleClickKeysAreClearedDuringInitialization() {

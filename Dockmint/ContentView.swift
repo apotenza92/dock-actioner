@@ -112,6 +112,12 @@ struct PreferencesView: View {
         AppIdentity.supportsUpdates
     }
 
+    private var suggestedMouseScrollTool: MouseScrollDirectionTool? {
+        MouseScrollDirectionToolDetector.detectedTools().first { tool in
+            preferences.shouldSuggestReverseMouseScrollAfterOnboarding(for: tool)
+        }
+    }
+
     private enum MappingSource: CaseIterable, Hashable {
         case click
         case scrollUp
@@ -381,6 +387,20 @@ struct PreferencesView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Toggle("Show menu bar icon", isOn: $preferences.showMenuBarIcon)
 
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .center, spacing: 8) {
+                        Toggle("Reverse mouse scroll direction", isOn: $preferences.reverseMouseScrollActions)
+
+                        Image(systemName: "info.circle")
+                            .foregroundStyle(.secondary)
+                            .help("Enable this if mouse-only scroll tools such as LinearMouse, Mos, or UnnaturalScrollWheels make Dockmint's Scroll Up and Scroll Down actions backwards. Trackpad and other continuous scrolling gestures keep following macOS behavior.")
+                    }
+
+                    if let tool = suggestedMouseScrollTool {
+                        mouseScrollToolSuggestion(for: tool)
+                    }
+                }
+
                 if loginItemAvailable {
                     Toggle("Start \(appDisplayName) at login", isOn: $preferences.startAtLogin)
                 } else {
@@ -397,6 +417,29 @@ struct PreferencesView: View {
                     applicationButtons
                 }
                 .padding(.top, 4)
+            }
+        }
+    }
+
+    private func mouseScrollToolSuggestion(for tool: MouseScrollDirectionTool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Detected \(tool.displayName). If you use it or a similar app to reverse your mouse's scrolling direction, turn this on so Dockmint's Scroll Up and Scroll Down actions match your mouse.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                Button("Turn On") {
+                    preferences.enableReverseMouseScrollActionsFromSuggestion(for: tool)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button("Not Now") {
+                    preferences.dismissMouseScrollToolSuggestion(for: tool)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
             }
         }
     }

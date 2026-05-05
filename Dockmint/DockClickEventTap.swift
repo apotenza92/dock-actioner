@@ -38,9 +38,6 @@ final class DockClickEventTap {
     private let duplicateMouseDownSuppressionWindow: TimeInterval = 0.35
     private var timeoutPassThroughUntilUptime: TimeInterval = 0
     private let timeoutPassThroughCooldown: TimeInterval = 0.18
-    private var cachedKnownRemapperRunning = false
-    private var lastKnownRemapperCheckUptime: TimeInterval = 0
-    private let remapperCheckInterval: TimeInterval = 1.0
 
     func start(
         clickHandler: @escaping (CGPoint, Int, Int, CGEventFlags, ClickPhase) -> Bool,
@@ -143,8 +140,6 @@ final class DockClickEventTap {
         syntheticReleaseHandler = nil
         tapTimeoutHandler = nil
         timeoutPassThroughUntilUptime = 0
-        cachedKnownRemapperRunning = false
-        lastKnownRemapperCheckUptime = 0
         resetInteractionState()
     }
 
@@ -176,27 +171,6 @@ final class DockClickEventTap {
         let sourcePID = event.getIntegerValueField(.eventSourceUnixProcessID)
         guard sourcePID > 0 else { return nil }
         return NSRunningApplication(processIdentifier: pid_t(sourcePID))?.bundleIdentifier
-    }
-
-    private func knownRemapperRunning(nowUptime: TimeInterval) -> Bool {
-        if nowUptime - lastKnownRemapperCheckUptime < remapperCheckInterval {
-            return cachedKnownRemapperRunning
-        }
-
-        lastKnownRemapperCheckUptime = nowUptime
-        let apps = NSWorkspace.shared.runningApplications
-        cachedKnownRemapperRunning = apps.contains { app in
-            let bundle = app.bundleIdentifier?.lowercased() ?? ""
-            let name = app.localizedName?.lowercased() ?? ""
-            return bundle.contains("mos")
-                || bundle.contains("linearmouse")
-                || bundle.contains("unnaturalscrollwheels")
-                || name.contains("mos")
-                || name.contains("linearmouse")
-                || name.contains("unnaturalscrollwheels")
-        }
-
-        return cachedKnownRemapperRunning
     }
 
     private func didReceiveClick(event: CGEvent, phase: ClickPhase) -> Bool {
@@ -320,20 +294,22 @@ final class DockClickEventTap {
             appKitDelta: Double(nsEvent?.scrollingDeltaX ?? 0)
         )
         let prefersAlternateAxis = flags.contains(.maskShift)
-        let delta = DockDecisionEngine.resolvedScrollDelta(primaryAxis: primaryAxis,
-                                                           alternateAxis: alternateAxis,
-                                                           isContinuous: isContinuous,
-                                                           prefersAlternateAxis: prefersAlternateAxis)
+        let resolvedDelta = DockDecisionEngine.resolvedScrollDeltaWithSource(primaryAxis: primaryAxis,
+                                                                             alternateAxis: alternateAxis,
+                                                                             isContinuous: isContinuous,
+                                                                             prefersAlternateAxis: prefersAlternateAxis)
+        let sourcePID = event.getIntegerValueField(.eventSourceUnixProcessID)
         let sourceBundleIdentifier = sourceBundleIdentifier(for: event)
         let nowUptime = ProcessInfo.processInfo.systemUptime
         let userOverrideInvertDiscrete = UserDefaults.standard.bool(forKey: Self.invertDiscreteScrollDirectionKey)
         let invertDiscreteDirection = DockDecisionEngine.shouldInvertDiscreteScrollDirection(
             isContinuous: isContinuous,
-            sourceBundleIdentifier: sourceBundleIdentifier,
-            knownRemapperRunning: knownRemapperRunning(nowUptime: nowUptime),
             userOverride: userOverrideInvertDiscrete
         )
-        let effectiveDelta = DockDecisionEngine.effectiveScrollDelta(delta: delta,
+        let inversionApplied = DockDecisionEngine.shouldApplyDiscreteScrollInversion(isContinuous: isContinuous,
+                                                                                     invertDiscreteDirection: invertDiscreteDirection,
+                                                                                     deltaSource: resolvedDelta.source)
+        let effectiveDelta = DockDecisionEngine.effectiveScrollDelta(delta: resolvedDelta,
                                                                      isContinuous: isContinuous,
                                                                      invertDiscreteDirection: invertDiscreteDirection)
         let scrollPhase = Int(event.getIntegerValueField(.scrollWheelEventScrollPhase))
@@ -369,17 +345,22 @@ final class DockClickEventTap {
         // Require a small threshold so accidental micro-movements are ignored, but single notches still count.
         let threshold = 0.2
         if abs(effectiveDelta) < threshold {
-            Logger.debug("DockClickEventTap: Scroll delta below threshold (raw: \(delta), effective: \(effectiveDelta)); ignoring")
+            Logger.debug("DockClickEventTap: Scroll delta below threshold at \(location.x), \(location.y) (yAppKit: \(primaryAxis.appKitDelta), yPoint: \(primaryAxis.pointDelta), yFixed: \(primaryAxis.fixedDelta), yCoarse: \(primaryAxis.coarseDelta), xAppKit: \(alternateAxis.appKitDelta), xPoint: \(alternateAxis.pointDelta), xFixed: \(alternateAxis.fixedDelta), xCoarse: \(alternateAxis.coarseDelta), prefersAlternateAxis: \(prefersAlternateAxis), sourcePID: \(sourcePID), sourceBundle: \(sourceBundleIdentifier ?? "nil"), inverted: \(nsEvent?.isDirectionInvertedFromDevice ?? false), deltaSource: \(resolvedDelta.source.rawValue), reverseMouseScrollActions: \(invertDiscreteDirection), flipDiscreteApplied: \(inversionApplied), rawDelta: \(resolvedDelta.value), effectiveDelta: \(effectiveDelta), continuous: \(isContinuous)); ignoring")
             return isContinuous ? continuousScrollConsume : false
         }
         
         // Route Up/Down by the effective delta sign for this event/device.
         // This respects per-device direction settings (trackpad vs mouse) and
         // third-party remappers (e.g. LinearMouse) that transform events upstream.
-        let resolvedDirection = DockDecisionEngine.resolvedScrollDirection(delta: effectiveDelta)
+        let effectiveResolvedDelta = ResolvedScrollDelta(value: effectiveDelta, source: resolvedDelta.source)
+        let appKitInterpretedUsesContentDirection = resolvedDelta.source.isAppKitInterpreted && invertDiscreteDirection
+        let resolvedDirection = DockDecisionEngine.resolvedScrollDirection(
+            delta: effectiveResolvedDelta,
+            appKitInterpretedUsesContentDirection: appKitInterpretedUsesContentDirection
+        )
         let direction: ScrollDirection = resolvedDirection == .up ? .up : .down
 
-        Logger.debug("DockClickEventTap: Raw scroll at \(location.x), \(location.y) (yAppKit: \(primaryAxis.appKitDelta), yPoint: \(primaryAxis.pointDelta), yFixed: \(primaryAxis.fixedDelta), yCoarse: \(primaryAxis.coarseDelta), xAppKit: \(alternateAxis.appKitDelta), xPoint: \(alternateAxis.pointDelta), xFixed: \(alternateAxis.fixedDelta), xCoarse: \(alternateAxis.coarseDelta), prefersAlternateAxis: \(prefersAlternateAxis), sourceBundle: \(sourceBundleIdentifier ?? "nil"), remapperRunning: \(cachedKnownRemapperRunning), inverted: \(nsEvent?.isDirectionInvertedFromDevice ?? false), flipDiscrete: \(invertDiscreteDirection), rawDelta: \(delta), effectiveDelta: \(effectiveDelta), dir: \(direction == .up ? "up" : "down"), continuous: \(isContinuous))")
+        Logger.debug("DockClickEventTap: Raw scroll at \(location.x), \(location.y) (yAppKit: \(primaryAxis.appKitDelta), yPoint: \(primaryAxis.pointDelta), yFixed: \(primaryAxis.fixedDelta), yCoarse: \(primaryAxis.coarseDelta), xAppKit: \(alternateAxis.appKitDelta), xPoint: \(alternateAxis.pointDelta), xFixed: \(alternateAxis.fixedDelta), xCoarse: \(alternateAxis.coarseDelta), prefersAlternateAxis: \(prefersAlternateAxis), sourcePID: \(sourcePID), sourceBundle: \(sourceBundleIdentifier ?? "nil"), inverted: \(nsEvent?.isDirectionInvertedFromDevice ?? false), deltaSource: \(resolvedDelta.source.rawValue), appKitContentMapping: \(appKitInterpretedUsesContentDirection), reverseMouseScrollActions: \(invertDiscreteDirection), flipDiscreteApplied: \(inversionApplied), rawDelta: \(resolvedDelta.value), effectiveDelta: \(effectiveDelta), dir: \(direction == .up ? "up" : "down"), continuous: \(isContinuous))")
         let shouldConsume = scrollHandler?(location, direction, flags) ?? false
         Logger.debug("DockClickEventTap: Scroll consume=\(shouldConsume)")
 

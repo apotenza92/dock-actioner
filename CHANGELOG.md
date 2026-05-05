@@ -6,6 +6,11 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
+## [v0.3.3]
+
+- Added a `Reverse mouse scroll direction` setting for mouse-wheel scroll actions, with first-run and Settings suggestions for users of tools like LinearMouse, Mos, and UnnaturalScrollWheels while leaving trackpad gestures unchanged.
+- Improved Dock scroll direction diagnostics and routing so remapped mouse-wheel actions can be corrected explicitly, and set both default no-modifier app-icon scroll directions to App Exposé.
+
 ## [v0.3.2]
 
 - Fixed the generated stable and beta app icon PNG exports to match the exact asset catalogue slot sizes again, which restores the shipped Finder and Applications icon after updating.
