@@ -22,7 +22,8 @@ jobs:
         run: |
           python3 -m unittest discover -s scripts/release/tests -v
           python3 -m py_compile scripts/release/*.py
-          python3 scripts/release/validate_release_contract.py --tag "v$(python3 -c 'import re,pathlib; print(re.search(r"MARKETING_VERSION = ([0-9.]+);", pathlib.Path("Dockmint.xcodeproj/project.pbxproj").read_text()).group(1))')"
+          current_tag="$(python3 -c 'import pathlib,re; print(re.search(r"^## \[(v[0-9][^]]*)\]$", pathlib.Path("CHANGELOG.md").read_text(), re.MULTILINE).group(1))')"
+          python3 scripts/release/validate_release_contract.py --tag "$current_tag"
 
       - name: Run decision-engine tests
         run: ./scripts/run_decision_engine_tests.sh

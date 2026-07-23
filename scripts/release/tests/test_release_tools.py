@@ -67,6 +67,13 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertNotIn("environment:", ci)
         self.assertNotIn("secrets.", ci)
         self.assertNotIn("contents: write", ci)
+        self.assertIn('pathlib.Path("CHANGELOG.md").read_text()', ci)
+        self.assertIn('--tag "$current_tag"', ci)
+        self.assertNotIn(
+            'MARKETING_VERSION = ([0-9.]+)',
+            ci,
+            "pull-request CI must validate the current prerelease tag, not invent a stable tag",
+        )
         self.assertIn('      - "v*"', release_triggers)
         for untrusted_trigger in (
             "pull_request:",
