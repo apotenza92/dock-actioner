@@ -46,6 +46,9 @@ final class AppIdentityXCTest: XCTestCase {
         XCTAssertTrue(AppIdentity.supportsLegacyDefaultsMigration(bundleIdentifier: AppIdentity.cleanupBetaBundleIdentifier))
         XCTAssertFalse(AppIdentity.supportsLegacyDefaultsMigration(bundleIdentifier: AppIdentity.transitionStableBundleIdentifier))
         XCTAssertEqual(AppIdentity.logDirectoryName(bundleIdentifier: AppIdentity.cleanupStableBundleIdentifier), "Dockmint")
+        XCTAssertEqual(AppIdentity.logDirectoryName(bundleIdentifier: AppIdentity.transitionStableBundleIdentifier), "Dockmint")
+        XCTAssertEqual(AppIdentity.logDirectoryName(bundleIdentifier: AppIdentity.cleanupBetaBundleIdentifier), "Dockmint Beta")
+        XCTAssertEqual(AppIdentity.logDirectoryName(bundleIdentifier: AppIdentity.transitionBetaBundleIdentifier), "Dockmint Beta")
         XCTAssertEqual(
             AppIdentity.supportedURLSchemes(bundleIdentifier: AppIdentity.cleanupStableBundleIdentifier),
             AppIdentity.legacyURLSchemes.union([AppIdentity.currentURLScheme])
