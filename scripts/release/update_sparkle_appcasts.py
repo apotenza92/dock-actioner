@@ -24,17 +24,14 @@ import urllib.request
 from email.utils import format_datetime
 from pathlib import Path
 
-
-STABLE_TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
-PRERELEASE_TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)-([0-9A-Za-z.-]+)$")
-
-
-@dataclasses.dataclass(frozen=True)
-class ParsedTag:
-    major: int
-    minor: int
-    patch: int
-    prerelease: str | None
+from release_contract import (
+    MINIMUM_SYSTEM_VERSION,
+    ParsedTag,
+    beta_asset_names,
+    parse_tag,
+    stable_asset_names,
+    version_key,
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -56,63 +53,12 @@ class Release:
     parsed: ParsedTag
 
 
-def parse_tag(tag: str) -> ParsedTag | None:
-    stable = STABLE_TAG_RE.match(tag)
-    if stable:
-        return ParsedTag(
-            int(stable.group(1)), int(stable.group(2)), int(stable.group(3)), None
-        )
-
-    prerelease = PRERELEASE_TAG_RE.match(tag)
-    if prerelease:
-        return ParsedTag(
-            int(prerelease.group(1)),
-            int(prerelease.group(2)),
-            int(prerelease.group(3)),
-            prerelease.group(4),
-        )
-
-    return None
-
-
-def prerelease_key(prerelease: str) -> tuple[tuple[int, int | str], ...]:
-    tokens: list[tuple[int, int | str]] = []
-    for part in re.split(r"[.-]", prerelease):
-        if part.isdigit():
-            tokens.append((0, int(part)))
-        else:
-            tokens.append((1, part.lower()))
-    return tuple(tokens)
-
-
-def version_key(
-    parsed: ParsedTag,
-) -> tuple[int, int, int, int, tuple[tuple[int, int | str], ...]]:
-    is_stable = 1 if parsed.prerelease is None else 0
-    suffix = () if parsed.prerelease is None else prerelease_key(parsed.prerelease)
-    return (parsed.major, parsed.minor, parsed.patch, is_stable, suffix)
-
-
 def sparkle_build_version(parsed: ParsedTag) -> str:
-    core = (parsed.major * 1_000_000) + (parsed.minor * 1_000) + parsed.patch
-    if parsed.prerelease is None:
-        stage = 90_000
-    else:
-        beta_match = re.search(
-            r"(?:beta|b)[.-]?(\d+)$", parsed.prerelease, flags=re.IGNORECASE
-        )
-        if beta_match:
-            stage = max(1, min(int(beta_match.group(1)), 89_999))
-        else:
-            stage = 50_000
-    return str((core * 100_000) + stage)
+    return parsed.build_number
 
 
 def short_version(parsed: ParsedTag) -> str:
-    base = f"{parsed.major}.{parsed.minor}.{parsed.patch}"
-    if parsed.prerelease is None:
-        return base
-    return f"{base}-{parsed.prerelease}"
+    return parsed.version
 
 
 def extract_notes(changelog_path: Path, tag: str) -> str:
@@ -144,7 +90,6 @@ def extract_notes(changelog_path: Path, tag: str) -> str:
 
 
 def fetch_releases(repo: str, github_token: str | None) -> list[Release]:
-    url = f"https://api.github.com/repos/{repo}/releases"
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "dockmint-sparkle-appcast-sync",
@@ -152,43 +97,54 @@ def fetch_releases(repo: str, github_token: str | None) -> list[Release]:
     if github_token:
         headers["Authorization"] = f"Bearer {github_token}"
 
-    req = urllib.request.Request(url, headers=headers)
-
-    try:
-        with urllib.request.urlopen(req, timeout=30) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"Failed to fetch releases from {repo}: {exc}") from exc
-
     releases: list[Release] = []
-    for item in payload:
-        parsed = parse_tag(item.get("tag_name", ""))
-        if parsed is None:
-            continue
+    for page in range(1, 101):
+        url = f"https://api.github.com/repos/{repo}/releases?per_page=100&page={page}"
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Failed to fetch releases from {repo}: {exc}") from exc
+        if not isinstance(payload, list):
+            raise RuntimeError(f"Unexpected GitHub releases response for {repo}")
 
-        assets = tuple(
-            ReleaseAsset(
-                name=str(asset.get("name", "")),
-                size=int(asset.get("size", 0)),
-                api_url=str(asset.get("url", "")),
-                download_url=str(asset.get("browser_download_url", "")),
+        for item in payload:
+            parsed = parse_tag(item.get("tag_name", ""))
+            if parsed is None:
+                continue
+            prerelease_flag = bool(item.get("prerelease", False))
+            if prerelease_flag != parsed.is_prerelease:
+                raise RuntimeError(
+                    f"Release {item.get('tag_name')} prerelease flag does not match its tag"
+                )
+
+            assets = tuple(
+                ReleaseAsset(
+                    name=str(asset.get("name", "")),
+                    size=int(asset.get("size", 0)),
+                    api_url=str(asset.get("url", "")),
+                    download_url=str(asset.get("browser_download_url", "")),
+                )
+                for asset in item.get("assets", [])
             )
-            for asset in item.get("assets", [])
-        )
-
-        releases.append(
-            Release(
-                tag_name=str(item.get("tag_name", "")),
-                html_url=str(item.get("html_url", "")),
-                draft=bool(item.get("draft", False)),
-                prerelease_flag=bool(item.get("prerelease", False)),
-                published_at=str(item.get("published_at", "")),
-                assets=assets,
-                parsed=parsed,
+            releases.append(
+                Release(
+                    tag_name=str(item.get("tag_name", "")),
+                    html_url=str(item.get("html_url", "")),
+                    draft=bool(item.get("draft", False)),
+                    prerelease_flag=prerelease_flag,
+                    published_at=str(item.get("published_at", "")),
+                    assets=assets,
+                    parsed=parsed,
+                )
             )
-        )
+        if len(payload) < 100:
+            break
+    else:
+        raise RuntimeError(f"GitHub releases pagination exceeded 100 pages for {repo}")
 
-    return [release for release in releases if not release.draft]
+    return releases
 
 
 def pick_latest(releases: list[Release]) -> Release | None:
@@ -205,20 +161,6 @@ def find_asset(release: Release, *asset_names: str) -> ReleaseAsset:
     attempted = ", ".join(repr(name) for name in asset_names)
     raise RuntimeError(
         f"None of the assets [{attempted}] were found in release {release.tag_name}"
-    )
-
-
-def stable_asset_names(version: str, arch: str) -> tuple[str, ...]:
-    return (
-        f"Dockmint-v{version}-macos-{arch}.zip",
-        f"Docktor-v{version}-macos-{arch}.zip",
-    )
-
-
-def beta_asset_names(version: str, arch: str) -> tuple[str, ...]:
-    return (
-        f"Dockmint-Beta-v{version}-macos-{arch}.zip",
-        f"Docktor-Beta-v{version}-macos-{arch}.zip",
     )
 
 
@@ -441,7 +383,7 @@ def render_appcast(
       <link>{release.html_url}</link>
       <sparkle:version>{sparkle_version}</sparkle:version>
       <sparkle:shortVersionString>{update_title}</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <sparkle:minimumSystemVersion>{MINIMUM_SYSTEM_VERSION}</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>{changelog_url}</sparkle:fullReleaseNotesLink>
       <description sparkle:format=\"plain-text\"><![CDATA[{escaped_notes}]]></description>
       <pubDate>{published}</pubDate>
@@ -497,6 +439,11 @@ def main() -> int:
         help="Fail if no Sparkle private key is available",
     )
     parser.add_argument(
+        "--candidate-tag",
+        default=None,
+        help="Include this exact draft release while generating pre-publication appcasts",
+    )
+    parser.add_argument(
         "--sparkle-sign-update-bin",
         default=None,
         help="Optional path to Sparkle's sign_update tool for signing appcasts using Sparkle-native key handling",
@@ -543,7 +490,15 @@ def main() -> int:
             "Missing Sparkle private key. Set SPARKLE_PRIVATE_ED_KEY or --sparkle-private-key."
         )
 
-    releases = fetch_releases(args.repo, github_token)
+    releases = [
+        release
+        for release in fetch_releases(args.repo, github_token)
+        if not release.draft or release.tag_name == args.candidate_tag
+    ]
+    if args.candidate_tag is not None and not any(
+        release.tag_name == args.candidate_tag for release in releases
+    ):
+        raise RuntimeError(f"Candidate release was not found: {args.candidate_tag}")
 
     stable = pick_latest(
         [release for release in releases if release.parsed.prerelease is None]

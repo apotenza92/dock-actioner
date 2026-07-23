@@ -11,8 +11,8 @@ if [[ -z "$VERSION" ]]; then
   exit 1
 fi
 
-if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-  echo "Error: invalid semver version '$VERSION'"
+if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[1-9][0-9]*)?$ ]]; then
+  echo "Error: version must match X.Y.Z or X.Y.Z-beta.N with N >= 1 ('$VERSION')"
   exit 1
 fi
 
@@ -60,23 +60,23 @@ if [[ "$PROJECT_VERSION" != "$CORE_VERSION" ]]; then
   exit 1
 fi
 
-VALIDATE_ARGS=()
-if [[ "${DOCKMINT_ALLOW_LEGACY_RELEASE_REPO:-}" != "1" ]]; then
-  VALIDATE_ARGS+=(--require-canonical-origin)
-fi
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/release/validate_release_contract.py \
+  --tag "$TAG" \
+  --require-canonical-origin
 
-python3 scripts/release/validate_dockmint_migration.py "${VALIDATE_ARGS[@]}"
-
-RELEASE_VALIDATION_WAIVER="${DOCKMINT_RELEASE_VALIDATION_WAIVER:-${DOCKTOR_RELEASE_VALIDATION_WAIVER:-}}"
+RELEASE_VALIDATION_WAIVER="${DOCKMINT_RELEASE_VALIDATION_WAIVER:-}"
 
 if [[ -n "$RELEASE_VALIDATION_WAIVER" ]]; then
   if [[ ! "$RELEASE_VALIDATION_WAIVER" =~ (https://github.com/.+/issues/[0-9]+|#[0-9]+) ]]; then
-    echo "Error: DOCKMINT_RELEASE_VALIDATION_WAIVER/DOCKTOR_RELEASE_VALIDATION_WAIVER must reference an issue (e.g. #123 or full GitHub issue URL)"
+    echo "Error: DOCKMINT_RELEASE_VALIDATION_WAIVER must reference an issue (e.g. #123 or full GitHub issue URL)"
     exit 1
   fi
   echo "WARNING: skipping required release validation under waiver: $RELEASE_VALIDATION_WAIVER"
 else
   echo "Running required pre-release validation..."
+  PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/release/tests -v
+  ./scripts/run_decision_engine_tests.sh
+  xcodebuild -project Dockmint.xcodeproj -scheme Dockmint -configuration Debug -destination 'platform=macOS' test
   xcodebuild -project Dockmint.xcodeproj -scheme Dockmint -configuration Debug build
   ./scripts/automated_settings_shell_checks.sh
 fi

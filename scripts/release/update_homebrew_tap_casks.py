@@ -21,17 +21,13 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-
-STABLE_TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
-PRERELEASE_TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)-([0-9A-Za-z.-]+)$")
-
-
-@dataclasses.dataclass(frozen=True)
-class ParsedTag:
-    major: int
-    minor: int
-    patch: int
-    prerelease: str | None
+from release_contract import (
+    ParsedTag,
+    beta_asset_names,
+    parse_tag,
+    stable_asset_names,
+    version_key,
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -49,43 +45,6 @@ class ReleaseAsset:
     download_url: str
     size: int
     sha256: str | None
-
-
-def parse_tag(tag: str) -> ParsedTag | None:
-    stable = STABLE_TAG_RE.match(tag)
-    if stable:
-        return ParsedTag(
-            int(stable.group(1)), int(stable.group(2)), int(stable.group(3)), None
-        )
-
-    prerelease = PRERELEASE_TAG_RE.match(tag)
-    if prerelease:
-        return ParsedTag(
-            int(prerelease.group(1)),
-            int(prerelease.group(2)),
-            int(prerelease.group(3)),
-            prerelease.group(4),
-        )
-
-    return None
-
-
-def prerelease_key(prerelease: str) -> tuple[tuple[int, int | str], ...]:
-    tokens: list[tuple[int, int | str]] = []
-    for part in re.split(r"[.-]", prerelease):
-        if part.isdigit():
-            tokens.append((0, int(part)))
-        else:
-            tokens.append((1, part.lower()))
-    return tuple(tokens)
-
-
-def version_key(
-    parsed: ParsedTag,
-) -> tuple[int, int, int, int, tuple[tuple[int, int | str], ...]]:
-    is_stable = 1 if parsed.prerelease is None else 0
-    suffix = () if parsed.prerelease is None else prerelease_key(parsed.prerelease)
-    return (parsed.major, parsed.minor, parsed.patch, is_stable, suffix)
 
 
 def parse_sha256_digest(raw: object) -> str | None:
@@ -110,46 +69,54 @@ def build_api_headers(user_agent: str, github_token: str | None) -> dict[str, st
 
 
 def fetch_releases(repo: str, github_token: str | None) -> list[Release]:
-    url = f"https://api.github.com/repos/{repo}/releases"
-    req = urllib.request.Request(
-        url,
-        headers=build_api_headers(
-            user_agent="dockmint-homebrew-sync", github_token=github_token
-        ),
-    )
-
-    try:
-        with urllib.request.urlopen(req, timeout=20) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"Failed to fetch releases from {repo}: {exc}") from exc
-
     output: list[Release] = []
-    for item in payload:
-        tag = item.get("tag_name", "")
-        parsed = parse_tag(tag)
-        if parsed is None:
-            continue
+    headers = build_api_headers(
+        user_agent="dockmint-homebrew-sync", github_token=github_token
+    )
+    for page in range(1, 101):
+        url = f"https://api.github.com/repos/{repo}/releases?per_page=100&page={page}"
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=20) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Failed to fetch releases from {repo}: {exc}") from exc
+        if not isinstance(payload, list):
+            raise RuntimeError(f"Unexpected GitHub releases response for {repo}")
 
-        assets = tuple(
-            ReleaseAsset(
-                name=str(asset.get("name", "")),
-                download_url=str(asset.get("browser_download_url", "")),
-                size=int(asset.get("size", 0)),
-                sha256=parse_sha256_digest(asset.get("digest")),
-            )
-            for asset in item.get("assets", [])
-        )
+        for item in payload:
+            tag = item.get("tag_name", "")
+            parsed = parse_tag(tag)
+            if parsed is None:
+                continue
+            prerelease_flag = bool(item.get("prerelease", False))
+            if prerelease_flag != parsed.is_prerelease:
+                raise RuntimeError(
+                    f"Release {tag} prerelease flag does not match its tag"
+                )
 
-        output.append(
-            Release(
-                tag_name=tag,
-                draft=bool(item.get("draft", False)),
-                prerelease_flag=bool(item.get("prerelease", False)),
-                assets=assets,
-                parsed=parsed,
+            assets = tuple(
+                ReleaseAsset(
+                    name=str(asset.get("name", "")),
+                    download_url=str(asset.get("browser_download_url", "")),
+                    size=int(asset.get("size", 0)),
+                    sha256=parse_sha256_digest(asset.get("digest")),
+                )
+                for asset in item.get("assets", [])
             )
-        )
+            output.append(
+                Release(
+                    tag_name=tag,
+                    draft=bool(item.get("draft", False)),
+                    prerelease_flag=prerelease_flag,
+                    assets=assets,
+                    parsed=parsed,
+                )
+            )
+        if len(payload) < 100:
+            break
+    else:
+        raise RuntimeError(f"GitHub releases pagination exceeded 100 pages for {repo}")
 
     return [release for release in output if not release.draft]
 
@@ -161,10 +128,7 @@ def pick_latest(releases: list[Release]) -> Release | None:
 
 
 def version_string(parsed: ParsedTag) -> str:
-    base = f"{parsed.major}.{parsed.minor}.{parsed.patch}"
-    if parsed.prerelease:
-        return f"{base}-{parsed.prerelease}"
-    return base
+    return parsed.version
 
 
 def find_asset(release: Release, *names: str) -> ReleaseAsset:
@@ -175,20 +139,6 @@ def find_asset(release: Release, *names: str) -> ReleaseAsset:
     attempted = ", ".join(repr(name) for name in names)
     raise RuntimeError(
         f"None of the assets [{attempted}] were found in release {release.tag_name}"
-    )
-
-
-def stable_asset_names(version: str, arch: str) -> tuple[str, ...]:
-    return (
-        f"Dockmint-v{version}-macos-{arch}.zip",
-        f"Docktor-v{version}-macos-{arch}.zip",
-    )
-
-
-def beta_asset_names(version: str, arch: str) -> tuple[str, ...]:
-    return (
-        f"Dockmint-Beta-v{version}-macos-{arch}.zip",
-        f"Docktor-Beta-v{version}-macos-{arch}.zip",
     )
 
 
@@ -233,17 +183,20 @@ def render_stable_cask(
     intel_url: str,
     intel_sha256: str,
 ) -> str:
+    arm_url = versioned_cask_url(arm_url, version)
+    intel_url = versioned_cask_url(intel_url, version)
     return f'''cask "{token}" do
   version "{version}"
 
   on_arm do
-    url "{arm_url}"
     sha256 "{arm_sha256}"
-  end
 
+    url "{arm_url}"
+  end
   on_intel do
-    url "{intel_url}"
     sha256 "{intel_sha256}"
+
+    url "{intel_url}"
   end
 
   name "{name}"
@@ -255,20 +208,22 @@ def render_stable_cask(
     strategy :github_latest
   end
 
+  depends_on macos: :sonoma
+
   app "Dockmint.app"
 
   zap trash: [
-    "~/Library/Application Support/Dockmint",
-    "~/Library/Application Support/Docktor",
-    "~/Library/Caches/pzc.Dockter",
-    "~/Library/Caches/pzc.Dockmint",
-    "~/Library/Logs/Dockmint",
-    "~/Library/Preferences/pzc.Dockter.plist",
-    "~/Library/Preferences/pzc.Dockmint.plist",
-    "~/Library/Saved Application State/pzc.Dockter.savedState",
-    "~/Library/Saved Application State/pzc.Dockmint.savedState",
     "~/Code/Dockmint/logs",
     "~/Code/Docktor/logs",
+    "~/Library/Application Support/Dockmint",
+    "~/Library/Application Support/Docktor",
+    "~/Library/Caches/pzc.Dockmint",
+    "~/Library/Caches/pzc.Dockter",
+    "~/Library/Logs/Dockmint",
+    "~/Library/Preferences/pzc.Dockmint.plist",
+    "~/Library/Preferences/pzc.Dockter.plist",
+    "~/Library/Saved Application State/pzc.Dockmint.savedState",
+    "~/Library/Saved Application State/pzc.Dockter.savedState",
   ]
 end
 '''
@@ -285,17 +240,20 @@ def render_beta_cask(
     intel_url: str,
     intel_sha256: str,
 ) -> str:
+    arm_url = versioned_cask_url(arm_url, version)
+    intel_url = versioned_cask_url(intel_url, version)
     return f'''cask "{token}" do
   version "{version}"
 
   on_arm do
-    url "{arm_url}"
     sha256 "{arm_sha256}"
-  end
 
+    url "{arm_url}"
+  end
   on_intel do
-    url "{intel_url}"
     sha256 "{intel_sha256}"
+
+    url "{intel_url}"
   end
 
   name "{name}"
@@ -307,27 +265,38 @@ def render_beta_cask(
     strategy :json do |json|
       json
         .reject {{ |release| release["draft"] }}
-        .map {{ |release| release["tag_name"] }}
+        .map {{ |release| release["tag_name"].delete_prefix("v") }}
     end
   end
+
+  depends_on macos: :sonoma
 
   app "Dockmint Beta.app"
 
   zap trash: [
-    "~/Library/Application Support/Dockmint Beta",
-    "~/Library/Application Support/Docktor Beta",
-    "~/Library/Caches/pzc.Dockter.beta",
-    "~/Library/Caches/pzc.Dockmint.beta",
-    "~/Library/Logs/Dockmint",
-    "~/Library/Preferences/pzc.Dockter.beta.plist",
-    "~/Library/Preferences/pzc.Dockmint.beta.plist",
-    "~/Library/Saved Application State/pzc.Dockter.beta.savedState",
-    "~/Library/Saved Application State/pzc.Dockmint.beta.savedState",
     "~/Code/Dockmint/logs",
     "~/Code/Docktor/logs",
+    "~/Library/Application Support/Dockmint Beta",
+    "~/Library/Application Support/Docktor Beta",
+    "~/Library/Caches/pzc.Dockmint.beta",
+    "~/Library/Caches/pzc.Dockter.beta",
+    "~/Library/Logs/Dockmint",
+    "~/Library/Preferences/pzc.Dockmint.beta.plist",
+    "~/Library/Preferences/pzc.Dockter.beta.plist",
+    "~/Library/Saved Application State/pzc.Dockmint.beta.savedState",
+    "~/Library/Saved Application State/pzc.Dockter.beta.savedState",
   ]
 end
 '''
+
+
+def versioned_cask_url(url: str, version: str) -> str:
+    version_token = f"v{version}"
+    if url.count(version_token) != 2:
+        raise ValueError(
+            f"release URL must contain {version_token!r} in its tag and artifact name: {url}"
+        )
+    return url.replace(version_token, "v#{version}")
 
 
 def write_if_changed(path: Path, content: str) -> bool:
@@ -355,12 +324,6 @@ def main() -> int:
         "--github-token",
         default=os.environ.get("GITHUB_TOKEN", "").strip() or None,
         help="GitHub token for API and asset download requests (defaults to GITHUB_TOKEN env var)",
-    )
-    parser.add_argument(
-        "--legacy-alias-mode",
-        choices=("keep", "remove"),
-        default=os.environ.get("DOCKMINT_LEGACY_HOMEBREW_ALIAS_MODE", "remove"),
-        help="Whether to keep or remove legacy docktor Homebrew alias casks",
     )
     args = parser.parse_args()
 
@@ -408,7 +371,7 @@ def main() -> int:
             render_stable_cask(
                 "dockmint",
                 "Dockmint",
-                "Dock gesture actions for macOS",
+                "Dock gesture actions",
                 args.repo,
                 stable_version,
                 stable_arm_asset.download_url,
@@ -417,24 +380,6 @@ def main() -> int:
                 stable_intel_sha,
             ),
         )
-        legacy_stable_path = casks_dir / "docktor.rb"
-        if args.legacy_alias_mode == "keep":
-            write_if_changed(
-                legacy_stable_path,
-                render_stable_cask(
-                    "docktor",
-                    "Dockmint",
-                    "Legacy alias for Dockmint",
-                    args.repo,
-                    stable_version,
-                    stable_arm_asset.download_url,
-                    stable_arm_sha,
-                    stable_intel_asset.download_url,
-                    stable_intel_sha,
-                ),
-            )
-        elif legacy_stable_path.exists():
-            legacy_stable_path.unlink()
         print(
             f"Stable cask -> {stable_version} ({'updated' if stable_changed else 'unchanged'})"
         )
@@ -464,24 +409,6 @@ def main() -> int:
             beta_intel_sha,
         ),
     )
-    legacy_beta_path = casks_dir / "docktor@beta.rb"
-    if args.legacy_alias_mode == "keep":
-        write_if_changed(
-            legacy_beta_path,
-            render_beta_cask(
-                "docktor@beta",
-                "Dockmint Beta",
-                "Legacy beta alias for Dockmint",
-                args.repo,
-                beta_version,
-                beta_arm_asset.download_url,
-                beta_arm_sha,
-                beta_intel_asset.download_url,
-                beta_intel_sha,
-            ),
-        )
-    elif legacy_beta_path.exists():
-        legacy_beta_path.unlink()
     print(f"Beta cask -> {beta_version} ({'updated' if beta_changed else 'unchanged'})")
 
     return 0

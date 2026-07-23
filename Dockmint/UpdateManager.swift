@@ -1,5 +1,7 @@
 import Foundation
 import Combine
+import AppKit
+import Darwin
 import Sparkle
 
 @MainActor
@@ -16,6 +18,42 @@ final class UpdateManager: NSObject, ObservableObject, SPUUpdaterDelegate {
     private var didConfigure = false
     private var isCheckingForUpdates = false
 
+    private struct RelaunchTestConfiguration: Decodable {
+        let expectedVersion: String
+        let resultPath: String
+        let bundlePath: String
+        let expiresAt: TimeInterval
+    }
+
+    private var relaunchTestConfiguration: RelaunchTestConfiguration? {
+        let path = "/tmp/dockmint-sparkle-update-test.json"
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: path),
+              (attributes[.posixPermissions] as? NSNumber)?.intValue == 0o600,
+              (attributes[.ownerAccountID] as? NSNumber)?.uint32Value == getuid(),
+              let data = FileManager.default.contents(atPath: path),
+              let configuration = try? JSONDecoder().decode(RelaunchTestConfiguration.self, from: data),
+              configuration.expiresAt > Date().timeIntervalSince1970,
+              configuration.bundlePath == Bundle.main.bundlePath,
+              configuration.resultPath.hasPrefix("/") else {
+            return nil
+        }
+        return configuration
+    }
+
+    private var releaseUpdateTestEnvironment: [String: String]? {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["DOCKMINT_SPARKLE_UPDATE_TEST"] == "1",
+              let feedURL = environment["DOCKMINT_SPARKLE_TEST_FEED_URL"],
+              feedURL.hasPrefix("http://127.0.0.1:"),
+              let expectedVersion = environment["DOCKMINT_SPARKLE_TEST_EXPECTED_VERSION"],
+              !expectedVersion.isEmpty,
+              let resultPath = environment["DOCKMINT_SPARKLE_TEST_RESULT"],
+              resultPath.hasPrefix("/") else {
+            return nil
+        }
+        return ["feedURL": feedURL, "expectedVersion": expectedVersion, "resultPath": resultPath]
+    }
+
     private lazy var updaterController = SPUStandardUpdaterController(
         startingUpdater: false,
         updaterDelegate: self,
@@ -31,6 +69,14 @@ final class UpdateManager: NSObject, ObservableObject, SPUUpdaterDelegate {
         guard !didConfigure else { return }
         didConfigure = true
 
+        if let test = relaunchTestConfiguration,
+           Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String == test.expectedVersion {
+            writeReleaseUpdateTestResult("installed-and-relaunched:\(test.expectedVersion)", path: test.resultPath)
+            try? FileManager.default.removeItem(atPath: "/tmp/dockmint-sparkle-update-test.json")
+            NSApp.terminate(nil)
+            return
+        }
+
         guard !isAutomatedMode else {
             Logger.log("UpdateManager disabled in automated test mode")
             updateStatusText = "Update checks disabled in automated test mode."
@@ -45,6 +91,12 @@ final class UpdateManager: NSObject, ObservableObject, SPUUpdaterDelegate {
         }
 
         updaterController.startUpdater()
+        if releaseUpdateTestEnvironment != nil {
+            updaterController.updater.automaticallyDownloadsUpdates = true
+            DispatchQueue.main.async { [weak self] in
+                self?.updaterController.updater.checkForUpdatesInBackground()
+            }
+        }
         bindUpdaterState()
         bindPreferences()
         refreshIdleStatusText()
@@ -136,6 +188,12 @@ final class UpdateManager: NSObject, ObservableObject, SPUUpdaterDelegate {
     }
 
     nonisolated func feedURLString(for updater: SPUUpdater) -> String? {
+        let environment = ProcessInfo.processInfo.environment
+        if environment["DOCKMINT_SPARKLE_UPDATE_TEST"] == "1",
+           let testFeedURL = environment["DOCKMINT_SPARKLE_TEST_FEED_URL"],
+           testFeedURL.hasPrefix("http://127.0.0.1:") {
+            return testFeedURL
+        }
         let bundleIdentifier = Bundle.main.bundleIdentifier ?? ""
         let usesTransitionBundleIdentifier = bundleIdentifier == "pzc.Dockter"
             || bundleIdentifier == "pzc.Dockter.beta"
@@ -217,8 +275,31 @@ final class UpdateManager: NSObject, ObservableObject, SPUUpdaterDelegate {
 
     nonisolated func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
         Task { @MainActor in
+            if let test = releaseUpdateTestEnvironment {
+                writeReleaseUpdateTestResult("error:\(error.localizedDescription)", path: test["resultPath"]!)
+            }
             finishUpdateCheckIfNeeded()
             updateStatusText = updateStatusText(for: error)
+        }
+    }
+
+    nonisolated func updater(
+        _ updater: SPUUpdater,
+        willInstallUpdateOnQuit item: SUAppcastItem,
+        immediateInstallationBlock: @escaping () -> Void
+    ) -> Bool {
+        guard ProcessInfo.processInfo.environment["DOCKMINT_SPARKLE_UPDATE_TEST"] == "1" else {
+            return false
+        }
+        immediateInstallationBlock()
+        return true
+    }
+
+    private func writeReleaseUpdateTestResult(_ value: String, path: String) {
+        do {
+            try value.write(toFile: path, atomically: true, encoding: .utf8)
+        } catch {
+            Logger.log("Failed to write Sparkle release-test result: \(error.localizedDescription)")
         }
     }
 
