@@ -97,7 +97,7 @@ class ReleaseContractTests(unittest.TestCase):
             "  generate-signed-appcasts:", 1
         )[0]
         publish = workflow.split("  publish-release:", 1)[1].split(
-            "  publish-sparkle-appcasts:", 1
+            "  prepare-sparkle-publication:", 1
         )[0]
 
         self.assertIn("fetch-depth: 0", workflow.split("  release-gate:", 1)[0])
@@ -149,9 +149,9 @@ class ReleaseContractTests(unittest.TestCase):
             "  generate-signed-appcasts:", 1
         )[0]
         publication = workflow.split("  publish-release:", 1)[1].split(
-            "  publish-sparkle-appcasts:", 1
+            "  prepare-sparkle-publication:", 1
         )[0]
-        appcast = workflow.split("  publish-sparkle-appcasts:", 1)[1].split(
+        appcast = workflow.split("  prepare-sparkle-publication:", 1)[1].split(
             "  generate-homebrew-casks:", 1
         )[0]
         self.assertNotIn("environment:", draft + appcast)
@@ -223,16 +223,23 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn("prefixes=(Dockmint \"${prefixes[@]}\")", draft)
         self.assertIn("--draft --prerelease", draft)
 
-    def test_homebrew_token_is_scoped_to_the_final_push(self):
+    def test_publication_jobs_never_commit_or_push(self):
         workflow = (RELEASE_DIR.parent.parent / ".github/workflows/release.yml").read_text(
             encoding="utf-8"
         )
-        publish = workflow.split("  publish-homebrew-tap:", 1)[1]
-        before_push = publish.split("      - name: Commit and push cask changes", 1)[0]
-        self.assertIn("persist-credentials: false", before_push)
-        self.assertNotIn("HOMEBREW_TAP_TOKEN", before_push)
-        self.assertEqual(publish.count("secrets.HOMEBREW_TAP_TOKEN"), 1)
-        self.assertIn('GIT_ASKPASS="$ASKPASS"', publish)
+        appcast = workflow.split("  prepare-sparkle-publication:", 1)[1].split(
+            "  generate-homebrew-casks:", 1
+        )[0]
+        homebrew = workflow.split("  prepare-homebrew-publication:", 1)[1]
+        for publication in (appcast, homebrew):
+            self.assertIn("actions/upload-artifact", publication)
+            self.assertIn("SHA256SUMS", publication)
+            self.assertIn("Apply these exact", publication)
+            self.assertNotIn("git commit", publication)
+            self.assertNotIn("git push", publication)
+            self.assertNotIn("contents: write", publication)
+        self.assertNotIn("HOMEBREW_TAP_TOKEN", workflow)
+        self.assertNotIn("secrets.HOMEBREW_TAP_TOKEN", workflow)
 
     def test_homebrew_publishes_the_exact_native_validated_artifact(self):
         workflow = (RELEASE_DIR.parent.parent / ".github/workflows/release.yml").read_text(
@@ -240,25 +247,26 @@ class ReleaseContractTests(unittest.TestCase):
         )
         self.assertIn("  generate-homebrew-casks:", workflow)
         validation = workflow.split("  validate-homebrew-casks:", 1)[1].split(
-            "  publish-homebrew-tap:", 1
+            "  prepare-homebrew-publication:", 1
         )[0]
-        publish = workflow.split("  publish-homebrew-tap:", 1)[1]
+        publication = workflow.split("  prepare-homebrew-publication:", 1)[1]
         self.assertIn("name: reviewed-homebrew-casks", validation)
         self.assertIn("brew tap apotenza92/tap", validation)
         self.assertIn("apotenza92/tap/dockmint@beta", validation)
-        self.assertIn("name: reviewed-homebrew-casks", publish)
-        self.assertNotIn("update_homebrew_tap_casks.py", publish)
-        self.assertIn("generate-homebrew-casks", publish)
-        self.assertIn("validate-homebrew-casks", publish)
+        self.assertIn("name: reviewed-homebrew-casks", publication)
+        self.assertNotIn("update_homebrew_tap_casks.py", publication)
+        self.assertIn("generate-homebrew-casks", publication)
+        self.assertIn("validate-homebrew-casks", publication)
+        self.assertIn("dockmint-homebrew-publication-", publication)
 
     def test_update_channels_require_an_immutable_public_release(self):
         workflow = (RELEASE_DIR.parent.parent / ".github/workflows/release.yml").read_text(
             encoding="utf-8"
         )
         publish_release = workflow.split("  publish-release:", 1)[1].split(
-            "  publish-sparkle-appcasts:", 1
+            "  prepare-sparkle-publication:", 1
         )[0]
-        appcast = workflow.split("  publish-sparkle-appcasts:", 1)[1].split(
+        appcast = workflow.split("  prepare-sparkle-publication:", 1)[1].split(
             "  generate-homebrew-casks:", 1
         )[0]
         homebrew = workflow.split("  generate-homebrew-casks:", 1)[1].split(
@@ -268,7 +276,7 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn("Published release is not immutable", publish_release)
         self.assertIn("- publish-release", appcast)
         self.assertIn("- publish-release", homebrew)
-        self.assertIn("- publish-sparkle-appcasts", homebrew)
+        self.assertIn("- prepare-sparkle-publication", homebrew)
 
     def test_sparkle_n_minus_one_uses_a_separate_non_secret_certificate_pin(self):
         workflow = (RELEASE_DIR.parent.parent / ".github/workflows/release.yml").read_text(

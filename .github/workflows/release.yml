@@ -581,41 +581,53 @@ jobs:
             exit 1
           fi
 
-  publish-sparkle-appcasts:
+  prepare-sparkle-publication:
     needs:
       - prepare
       - generate-signed-appcasts
       - publish-release
     permissions:
-      contents: write
+      contents: read
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout main for publication only
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          ref: main
       - name: Download reviewed appcasts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: signed-appcasts
-          path: reviewed-appcasts
-      - name: Commit reviewed appcast changes
+          path: publication/appcasts
+      - name: Seal appcast publication bundle
         env:
           TAG: ${{ needs.prepare.outputs.tag }}
         run: |
-          cp reviewed-appcasts/*.xml appcasts/
-          if git diff --quiet -- appcasts; then exit 0; fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add appcasts/*.xml
-          git commit -m "chore: update Sparkle appcasts for ${TAG}"
-          git push origin HEAD:main
+          set -euo pipefail
+          files="$(find publication/appcasts -maxdepth 1 -type f -name '*.xml' -exec basename {} \; | LC_ALL=C sort | paste -sd ' ' -)"
+          [[ "$files" == 'beta-arm64.xml beta-x64.xml stable-arm64.xml stable-x64.xml' ]]
+          (
+            cd publication
+            find appcasts -type f -name '*.xml' -print0 |
+              LC_ALL=C sort -z |
+              xargs -0 sha256sum > SHA256SUMS
+          )
+          printf '%s\n' \
+            "Dockmint appcast publication bundle" \
+            "release-tag=${TAG}" \
+            "release-commit=${{ github.sha }}" \
+            "destination=appcasts/" \
+            "Apply these exact reviewed bytes manually after the release approval gate." \
+            > publication/PUBLICATION.txt
+      - name: Upload appcast publication bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dockmint-appcast-publication-${{ needs.prepare.outputs.tag }}
+          path: publication
+          if-no-files-found: error
+          retention-days: 14
 
   generate-homebrew-casks:
     needs:
       - prepare
       - publish-release
-      - publish-sparkle-appcasts
+      - prepare-sparkle-publication
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -716,53 +728,44 @@ jobs:
             test ! -e "$app"
           done
 
-  publish-homebrew-tap:
+  prepare-homebrew-publication:
     needs:
       - prepare
       - generate-homebrew-casks
       - validate-homebrew-casks
-    environment: homebrew-release
-    runs-on: macos-15
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout Homebrew tap
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          repository: apotenza92/homebrew-tap
-          path: homebrew-tap
-          persist-credentials: false
       - name: Download exact casks validated on both native runners
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: reviewed-homebrew-casks
-          path: reviewed-casks
-      - name: Copy only the reviewed cask bytes into the tap
-        run: |
-          set -euo pipefail
-          casks="$(find reviewed-casks -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort | paste -sd ' ' -)"
-          [[ "$casks" == 'dockmint.rb dockmint@beta.rb' ]]
-          cp reviewed-casks/dockmint.rb homebrew-tap/Casks/dockmint.rb
-          cp reviewed-casks/dockmint@beta.rb homebrew-tap/Casks/dockmint@beta.rb
-      - name: Commit and push cask changes
+          path: publication/Casks
+      - name: Seal Homebrew publication bundle
         env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           set -euo pipefail
-          cd homebrew-tap
-          git add Casks/dockmint.rb Casks/dockmint@beta.rb
-          if git diff --cached --quiet; then exit 0; fi
-          git config user.name dockmint-release-bot
-          git config user.email actions@users.noreply.github.com
-          git commit -m 'Update Dockmint casks from release metadata'
-          ASKPASS="$RUNNER_TEMP/dockmint-homebrew-askpass"
-          cleanup() { rm -f "$ASKPASS"; }
-          trap cleanup EXIT
-          cat > "$ASKPASS" <<'SH'
-          #!/bin/sh
-          case "$1" in
-            *Username*) printf '%s\n' x-access-token ;;
-            *Password*) printf '%s\n' "$HOMEBREW_TAP_TOKEN" ;;
-            *) exit 1 ;;
-          esac
-          SH
-          chmod 700 "$ASKPASS"
-          GIT_ASKPASS="$ASKPASS" GIT_TERMINAL_PROMPT=0 git -c credential.helper= push origin main
+          casks="$(find publication/Casks -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort | paste -sd ' ' -)"
+          [[ "$casks" == 'dockmint.rb dockmint@beta.rb' ]]
+          (
+            cd publication
+            find Casks -type f -name '*.rb' -print0 |
+              LC_ALL=C sort -z |
+              xargs -0 sha256sum > SHA256SUMS
+          )
+          printf '%s\n' \
+            "Dockmint Homebrew publication bundle" \
+            "release-tag=${TAG}" \
+            "release-commit=${{ github.sha }}" \
+            "destination=apotenza92/homebrew-tap:Casks/" \
+            "Apply these exact natively validated bytes manually after the release approval gate." \
+            > publication/PUBLICATION.txt
+      - name: Upload Homebrew publication bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dockmint-homebrew-publication-${{ needs.prepare.outputs.tag }}
+          path: publication
+          if-no-files-found: error
+          retention-days: 14
