@@ -30,7 +30,7 @@ swift tools/generate_icons.swift
 
 ## CI and Distribution
 
-- `ci.yml`: native ARM64 and Intel XCTest, unsigned stable/beta builds, decision-engine tests, and release-contract checks.
+- `ci.yml`: manually invoked native ARM64 and Intel XCTest, unsigned stable/beta builds, decision-engine tests, and release-contract checks.
 - `release.yml`: native signed + notarized ARM64/Intel artifacts, strict package verification, GitHub Release publishing, Sparkle feeds, and Homebrew tap sync.
 - Release workflows are tag-push only. They stage an immutable draft, verify signatures and native N-1 Sparkle update behavior, then publish appcasts before validating and updating Homebrew.
 - Beta tags run native updater gates for beta ARM64/x64 only. Stable tags run both stable and beta updater gates because a stable release can advance both feeds.

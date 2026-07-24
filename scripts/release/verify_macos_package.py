@@ -127,7 +127,9 @@ def validate_notarization_log(path: Path) -> None:
     data = json.loads(path.read_text(encoding="utf-8"))
     if data.get("status") != "Accepted":
         raise ValueError(f"notarization log status is {data.get('status')!r}, expected 'Accepted'")
-    issues = data.get("issues", [])
+    issues = data.get("issues")
+    if issues is None:
+        issues = []
     if not isinstance(issues, list):
         raise ValueError("notarization log issues must be a list")
     errors = [issue for issue in issues if str(issue.get("severity", "")).lower() == "error"]

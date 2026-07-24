@@ -63,7 +63,10 @@ class ReleaseContractTests(unittest.TestCase):
         )
         release_triggers = release.split("permissions:", 1)[0]
 
-        self.assertIn("  pull_request:", ci)
+        ci_triggers = ci.split("permissions:", 1)[0]
+        self.assertIn("  workflow_dispatch:", ci_triggers)
+        self.assertNotIn("  push:", ci_triggers)
+        self.assertNotIn("  pull_request:", ci_triggers)
         self.assertNotIn("environment:", ci)
         self.assertNotIn("secrets.", ci)
         self.assertNotIn("contents: write", ci)
@@ -877,6 +880,11 @@ class VerifierTests(unittest.TestCase):
             path = Path(raw) / "log.json"
             path.write_text(json.dumps({"status": "Accepted", "issues": []}), encoding="utf-8")
             validate_notarization_log(path)
+            path.write_text(json.dumps({"status": "Accepted", "issues": None}), encoding="utf-8")
+            validate_notarization_log(path)
+            path.write_text(json.dumps({"status": "Accepted", "issues": {}}), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                validate_notarization_log(path)
             path.write_text(
                 json.dumps({"status": "Accepted", "issues": [{"severity": "error"}]}),
                 encoding="utf-8",
