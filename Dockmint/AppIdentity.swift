@@ -64,7 +64,8 @@ enum AppIdentity {
     static let currentOpenSettingsNotification = Notification.Name("pzc.Dockmint.openSettings")
     static let legacyOpenSettingsNotification = Notification.Name("pzc.Docktor.openSettings")
 
-    private static let persistentReleaseLogDirectoryName = "Dockmint"
+    private static let persistentStableLogDirectoryName = "Dockmint"
+    private static let persistentBetaLogDirectoryName = "Dockmint Beta"
     private static let persistentDevelopmentLogDirectoryName = "Dockmint Dev"
     private static let obsoletePersistentLogRelativePaths = [
         "Code/Docktor/logs",
@@ -184,9 +185,14 @@ enum AppIdentity {
     }
 
     static func logDirectoryName(bundleIdentifier: String) -> String {
-        isDevelopmentIdentity(bundleIdentifier: bundleIdentifier)
-            ? persistentDevelopmentLogDirectoryName
-            : persistentReleaseLogDirectoryName
+        switch runningIdentity(bundleIdentifier: bundleIdentifier) {
+        case .development:
+            return persistentDevelopmentLogDirectoryName
+        case .beta:
+            return persistentBetaLogDirectoryName
+        case .stable, .unknown:
+            return persistentStableLogDirectoryName
+        }
     }
 
     static var currentAppBundleName: String {

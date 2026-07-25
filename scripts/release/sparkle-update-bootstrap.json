@@ -1,0 +1,28 @@
+{
+  "stable-arm64": {
+    "previousVersion": "0.4.1",
+    "candidateVersions": [
+      "0.4.2"
+    ]
+  },
+  "stable-x64": {
+    "previousVersion": "0.4.1",
+    "candidateVersions": [
+      "0.4.2"
+    ]
+  },
+  "beta-arm64": {
+    "previousVersion": "0.4.1",
+    "candidateVersions": [
+      "0.4.2-beta.1",
+      "0.4.2"
+    ]
+  },
+  "beta-x64": {
+    "previousVersion": "0.4.1",
+    "candidateVersions": [
+      "0.4.2-beta.1",
+      "0.4.2"
+    ]
+  }
+}

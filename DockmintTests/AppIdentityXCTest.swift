@@ -1,6 +1,24 @@
 import XCTest
 
 final class AppIdentityXCTest: XCTestCase {
+    func testLegacyDocktorCompatibilityContract() {
+        XCTAssertEqual(AppIdentity.transitionStableBundleIdentifier, "pzc.Dockter")
+        XCTAssertEqual(AppIdentity.transitionBetaBundleIdentifier, "pzc.Dockter.beta")
+        XCTAssertEqual(AppIdentity.legacyURLSchemes, Set(["docktor", "dockter"]))
+        XCTAssertTrue(
+            AppIdentity.instanceBundleNames(bundleIdentifier: AppIdentity.cleanupStableBundleIdentifier)
+                .isSuperset(of: ["Dockter.app", "Docktor.app"])
+        )
+        XCTAssertEqual(
+            AppIdentity.preferredFeedRepository(bundleIdentifier: AppIdentity.transitionStableBundleIdentifier),
+            "apotenza92/docktor"
+        )
+        XCTAssertEqual(
+            AppIdentity.preferredFeedRepository(bundleIdentifier: AppIdentity.cleanupStableBundleIdentifier),
+            "apotenza92/dockmint"
+        )
+    }
+
     func testDevelopmentIdentityRecognition() {
         XCTAssertTrue(AppIdentity.isDevelopmentIdentity(bundleIdentifier: AppIdentity.developmentBundleIdentifier))
         XCTAssertEqual(AppIdentity.runningIdentity(bundleIdentifier: AppIdentity.developmentBundleIdentifier), .development)
@@ -28,6 +46,9 @@ final class AppIdentityXCTest: XCTestCase {
         XCTAssertTrue(AppIdentity.supportsLegacyDefaultsMigration(bundleIdentifier: AppIdentity.cleanupBetaBundleIdentifier))
         XCTAssertFalse(AppIdentity.supportsLegacyDefaultsMigration(bundleIdentifier: AppIdentity.transitionStableBundleIdentifier))
         XCTAssertEqual(AppIdentity.logDirectoryName(bundleIdentifier: AppIdentity.cleanupStableBundleIdentifier), "Dockmint")
+        XCTAssertEqual(AppIdentity.logDirectoryName(bundleIdentifier: AppIdentity.transitionStableBundleIdentifier), "Dockmint")
+        XCTAssertEqual(AppIdentity.logDirectoryName(bundleIdentifier: AppIdentity.cleanupBetaBundleIdentifier), "Dockmint Beta")
+        XCTAssertEqual(AppIdentity.logDirectoryName(bundleIdentifier: AppIdentity.transitionBetaBundleIdentifier), "Dockmint Beta")
         XCTAssertEqual(
             AppIdentity.supportedURLSchemes(bundleIdentifier: AppIdentity.cleanupStableBundleIdentifier),
             AppIdentity.legacyURLSchemes.union([AppIdentity.currentURLScheme])

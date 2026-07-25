@@ -25,29 +25,47 @@ swift tools/generate_icons.swift
   - Beta: `vX.Y.Z-beta.N`
 - `Dockmint.xcodeproj` `MARKETING_VERSION` must match tag core version (`X.Y.Z`).
 - `CHANGELOG.md` must contain a matching heading: `## [vX.Y.Z]` or `## [vX.Y.Z-beta.N]`.
-- The Docktor to Dockmint migration has completed its `R4` defaults. Use `docs/dockmint-migration.md` for the historical sequence and the current cleanup-era release variables.
-- Canonical tagged releases must run from `apotenza92/dockmint`; `./scripts/release.sh` blocks releases from legacy origins unless `DOCKMINT_ALLOW_LEGACY_RELEASE_REPO=1` is set.
+- The Docktor to Dockmint release migration is complete. Keep runtime compatibility for legacy bundle IDs, URL schemes, defaults, installed-app detection, and Homebrew `zap` paths, but do not restore transition release feeds, artifacts, aliases, or workflow variables.
+- Canonical tagged releases must run from `apotenza92/dockmint`; `./scripts/release.sh` validates the canonical origin before tagging.
 
 ## CI and Distribution
 
-- `ci.yml`: push/PR verification (build only).
-- `release.yml`: signed + notarized macOS artifacts, GitHub Release publishing, Homebrew tap sync.
-- Homebrew casks are updated in `apotenza92/homebrew-tap`:
+- `ci.yml`: manually invoked native ARM64 and Intel XCTest, unsigned stable/beta builds, decision-engine tests, and release-contract checks.
+- `release.yml`: native signed + notarized ARM64/Intel artefacts, strict package verification, GitHub Release publishing, and checksum-sealed Sparkle/Homebrew publication bundles.
+- Release workflows are tag-push only. They stage an immutable draft, verify signatures and native N-1 Sparkle update behaviour, then prepare exact appcast and Homebrew bundles for deliberate manual publication after the release gate. Workflows do not commit or push those repository updates.
+- Beta tags run native updater gates for beta ARM64/x64 only. Stable tags run both stable and beta updater gates because a stable release can advance both feeds.
+- The shell Settings and Dock suites require a logged-in Aqua session plus Accessibility/Input Monitoring grants, so they remain a required local pre-tag gate in `scripts/release.sh`; hosted CI owns XCTest and credential-free release-contract checks.
+- `scripts/release/sparkle-update-bootstrap.json` is a source-pinned exception because the v0.4.1 packages predate the real update-test hook. Stable permits only v0.4.1 -> v0.4.2. Beta permits v0.4.1 -> v0.4.2-beta.1 when the prerelease ships first, or v0.4.1 -> v0.4.2 when the stable tag is the first Beta-feed advance. Those exact first transitions verify the candidate and its hook but cannot prove an install from v0.4.1; every later transition on that channel must install and relaunch from N-1. Never advance, broaden, or bypass this contract.
+- Homebrew publication bundles target `apotenza92/homebrew-tap`:
   - `dockmint`
   - `dockmint@beta`
 - Beta cask tracks whichever is newer between stable and prerelease channels.
 
-## Secrets Expected In GitHub
+## Release environments and credentials
+
+- `release-signing`: protected P12 and App Store Connect P8 credentials used only by package jobs.
+- `sparkle-signing`: tag-restricted, with the Sparkle private key used only by appcast-signing jobs.
+- `release-policy`: tag-restricted, with only `IMMUTABLE_RELEASES_READ_TOKEN`, scoped to repository Administration read and used only by the read-only immutable-release policy job.
+- `stable-release` and `beta-release`: secret-free controls used only by the final public-release job. Draft staging, updater verification, and publication-bundle preparation must not consume their approval gate.
+
+Environment secrets:
 
 - `APPLE_SIGNING_CERTIFICATE_P12_BASE64`
 - `APPLE_SIGNING_CERTIFICATE_PASSWORD`
-- `APPLE_SIGNING_IDENTITY`
-- `APPLE_TEAM_ID`
-- `APPLE_NOTARYTOOL_KEY_ID`
-- `APPLE_NOTARYTOOL_ISSUER_ID`
 - `APPLE_NOTARYTOOL_KEY_P8_BASE64`
 - `SPARKLE_PRIVATE_ED_KEY`
-- `HOMEBREW_TAP_TOKEN`
+- `IMMUTABLE_RELEASES_READ_TOKEN`
+
+Repository variables:
+
+- `APPLE_NOTARYTOOL_KEY_ID`
+- `APPLE_NOTARYTOOL_ISSUER_ID`
+- `APPLE_SIGNING_CERTIFICATE_SHA256`
+- `APPLE_PRIOR_SIGNING_CERTIFICATE_SHA256` (N-1 updater package only; retain the prior leaf fingerprint across certificate rotation)
+- `APPLE_SIGNING_IDENTITY`
+- `APPLE_TEAM_ID`
+
+Release tags must resolve to commits reachable from the repository's `main` default branch.
 
 ## UI/Product Constraints
 

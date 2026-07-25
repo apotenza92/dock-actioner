@@ -15,7 +15,7 @@
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>CFBundleIconName</key>
-	<string>AppIcon</string>
+	<string>$(ASSETCATALOG_COMPILER_APPICON_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleURLTypes</key>
@@ -38,6 +38,8 @@
 	<key>SUPublicEDKey</key>
 	<string>zM3fwyZrb6uCBvOIv8Smh91DRMyrKVQPbWBGpkCcgDI=</string>
 	<key>SUEnableAutomaticChecks</key>
+	<false/>
+	<key>SUEnableInstallerLauncherService</key>
 	<false/>
 	<key>SUAutomaticallyUpdate</key>
 	<false/>

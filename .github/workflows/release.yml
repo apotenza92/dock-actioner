@@ -4,664 +4,768 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "Tag to release (example: v1.0.0 or v1.0.0-beta.1)"
-        required: true
-        type: string
-      rename_phase:
-        description: "Release phase for the Docktor -> Dockmint migration"
-        required: false
-        default: cleanup
-        type: choice
-        options:
-          - transition
-          - cleanup
-      legacy_feed_repo:
-        description: "Optional legacy repo that should continue hosting Sparkle appcasts during transition"
-        required: false
-        type: string
-      publish_legacy_appcasts:
-        description: "Override legacy Sparkle appcast mirroring for this release"
-        required: false
-        default: auto
-        type: choice
-        options:
-          - auto
-          - "true"
-          - "false"
-      legacy_homebrew_alias_mode:
-        description: "Override whether legacy Docktor Homebrew aliases are kept or removed"
-        required: false
-        default: auto
-        type: choice
-        options:
-          - auto
-          - keep
-          - remove
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: dockmint-release
+  cancel-in-progress: false
 
 jobs:
   prepare:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       tag: ${{ steps.meta.outputs.tag }}
       version: ${{ steps.meta.outputs.version }}
       version_core: ${{ steps.meta.outputs.version_core }}
       prerelease: ${{ steps.meta.outputs.prerelease }}
       build_number: ${{ steps.meta.outputs.build_number }}
-      rename_phase: ${{ steps.meta.outputs.rename_phase }}
-      stable_bundle_id: ${{ steps.meta.outputs.stable_bundle_id }}
-      beta_bundle_id: ${{ steps.meta.outputs.beta_bundle_id }}
-      feed_repo: ${{ steps.meta.outputs.feed_repo }}
-      legacy_feed_repo: ${{ steps.meta.outputs.legacy_feed_repo }}
-      publish_legacy_appcasts: ${{ steps.meta.outputs.publish_legacy_appcasts }}
-      legacy_homebrew_alias_mode: ${{ steps.meta.outputs.legacy_homebrew_alias_mode }}
+      release_matrix: ${{ steps.meta.outputs.release_matrix }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+          persist-credentials: false
 
-      - name: Parse tag metadata
-        id: meta
-        shell: bash
+      - name: Prove tag commit belongs to the approved release source
         env:
-          INPUT_RENAME_PHASE: ${{ inputs.rename_phase }}
-          INPUT_LEGACY_FEED_REPO: ${{ inputs.legacy_feed_repo }}
-          INPUT_PUBLISH_LEGACY_APPCASTS: ${{ inputs.publish_legacy_appcasts }}
-          INPUT_LEGACY_HOMEBREW_ALIAS_MODE: ${{ inputs.legacy_homebrew_alias_mode }}
-          VAR_RENAME_PHASE: ${{ vars.DOCKMINT_RENAME_PHASE }}
-          VAR_LEGACY_FEED_REPO: ${{ vars.DOCKMINT_LEGACY_FEED_REPO }}
-          VAR_PUBLISH_LEGACY_APPCASTS: ${{ vars.DOCKMINT_PUBLISH_LEGACY_APPCASTS }}
-          VAR_LEGACY_HOMEBREW_ALIAS_MODE: ${{ vars.DOCKMINT_LEGACY_HOMEBREW_ALIAS_MODE }}
-          CURRENT_REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            TAG="${{ inputs.tag }}"
-          else
-            TAG="${GITHUB_REF_NAME}"
-          fi
-
-          if [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
-            VERSION="${BASH_REMATCH[1]}"
-            CORE_VERSION="$VERSION"
-            PRERELEASE="false"
-          elif [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)-([0-9A-Za-z.-]+)$ ]]; then
-            VERSION="${BASH_REMATCH[1]}-${BASH_REMATCH[2]}"
-            CORE_VERSION="${BASH_REMATCH[1]}"
-            PRERELEASE="true"
-          else
-            echo "::error::Tag must match vX.Y.Z or vX.Y.Z-<prerelease>"
-            exit 1
-          fi
-
-          PROJECT_VERSION="$(python3 -c 'import re, pathlib; text = pathlib.Path("Dockmint.xcodeproj/project.pbxproj").read_text(encoding="utf-8"); m = re.search(r"MARKETING_VERSION = ([0-9]+\.[0-9]+\.[0-9]+);", text); print(m.group(1) if m else "")')"
-
-          if [[ "$PROJECT_VERSION" != "$CORE_VERSION" ]]; then
-            echo "::error::Tag core version ($CORE_VERSION) must match MARKETING_VERSION ($PROJECT_VERSION)."
-            exit 1
-          fi
-
-          BUILD_NUMBER="$(python3 -c 'import re,sys; tag=sys.argv[1]; m=re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?", tag); assert m; major,minor,patch=int(m.group(1)),int(m.group(2)),int(m.group(3)); prerelease=m.group(4); core=(major*1_000_000)+(minor*1_000)+patch; beta_match=(re.search(r"(?:beta|b)[.-]?(\d+)$", prerelease, flags=re.IGNORECASE) if prerelease else None); stage=(90_000 if prerelease is None else (min(max(int(beta_match.group(1)),1),89_999) if beta_match else 50_000)); print((core*100_000)+stage)' "$TAG")"
-
-          RENAME_PHASE="${INPUT_RENAME_PHASE:-${VAR_RENAME_PHASE:-cleanup}}"
-          if [[ "$RENAME_PHASE" != "transition" && "$RENAME_PHASE" != "cleanup" ]]; then
-            echo "::error::rename phase must be 'transition' or 'cleanup' (got '$RENAME_PHASE')"
-            exit 1
-          fi
-
-          LEGACY_FEED_REPO="${INPUT_LEGACY_FEED_REPO:-${VAR_LEGACY_FEED_REPO:-apotenza92/docktor}}"
-          if [[ -n "${INPUT_PUBLISH_LEGACY_APPCASTS:-}" && "${INPUT_PUBLISH_LEGACY_APPCASTS}" != "auto" ]]; then
-            PUBLISH_LEGACY_APPCASTS="${INPUT_PUBLISH_LEGACY_APPCASTS}"
-          else
-            PUBLISH_LEGACY_APPCASTS="${VAR_PUBLISH_LEGACY_APPCASTS:-}"
-          fi
-          if [[ -n "${INPUT_LEGACY_HOMEBREW_ALIAS_MODE:-}" && "${INPUT_LEGACY_HOMEBREW_ALIAS_MODE}" != "auto" ]]; then
-            LEGACY_HOMEBREW_ALIAS_MODE="${INPUT_LEGACY_HOMEBREW_ALIAS_MODE}"
-          else
-            LEGACY_HOMEBREW_ALIAS_MODE="${VAR_LEGACY_HOMEBREW_ALIAS_MODE:-}"
-          fi
-
-          if [[ -n "$PUBLISH_LEGACY_APPCASTS" && "$PUBLISH_LEGACY_APPCASTS" != "true" && "$PUBLISH_LEGACY_APPCASTS" != "false" ]]; then
-            echo "::error::publish_legacy_appcasts must resolve to 'true' or 'false' (got '$PUBLISH_LEGACY_APPCASTS')"
-            exit 1
-          fi
-
-          if [[ -n "$LEGACY_HOMEBREW_ALIAS_MODE" && "$LEGACY_HOMEBREW_ALIAS_MODE" != "keep" && "$LEGACY_HOMEBREW_ALIAS_MODE" != "remove" ]]; then
-            echo "::error::legacy_homebrew_alias_mode must resolve to 'keep' or 'remove' (got '$LEGACY_HOMEBREW_ALIAS_MODE')"
-            exit 1
-          fi
-
-          if [[ "$RENAME_PHASE" == "transition" ]]; then
-            STABLE_BUNDLE_ID="pzc.Dockter"
-            BETA_BUNDLE_ID="pzc.Dockter.beta"
-            FEED_REPO="$LEGACY_FEED_REPO"
-            if [[ -z "$PUBLISH_LEGACY_APPCASTS" ]]; then
-              if [[ "$LEGACY_FEED_REPO" == "$CURRENT_REPOSITORY" ]]; then
-                PUBLISH_LEGACY_APPCASTS="false"
-              else
-                PUBLISH_LEGACY_APPCASTS="true"
-              fi
-            fi
-            if [[ -z "$LEGACY_HOMEBREW_ALIAS_MODE" ]]; then
-              LEGACY_HOMEBREW_ALIAS_MODE="keep"
-            fi
-          else
-            STABLE_BUNDLE_ID="pzc.Dockmint"
-            BETA_BUNDLE_ID="pzc.Dockmint.beta"
-            FEED_REPO="$CURRENT_REPOSITORY"
-            PUBLISH_LEGACY_APPCASTS="${PUBLISH_LEGACY_APPCASTS:-false}"
-            LEGACY_HOMEBREW_ALIAS_MODE="${LEGACY_HOMEBREW_ALIAS_MODE:-remove}"
-          fi
-
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "version_core=$CORE_VERSION" >> "$GITHUB_OUTPUT"
-          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
-          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
-          echo "rename_phase=$RENAME_PHASE" >> "$GITHUB_OUTPUT"
-          echo "stable_bundle_id=$STABLE_BUNDLE_ID" >> "$GITHUB_OUTPUT"
-          echo "beta_bundle_id=$BETA_BUNDLE_ID" >> "$GITHUB_OUTPUT"
-          echo "feed_repo=$FEED_REPO" >> "$GITHUB_OUTPUT"
-          echo "legacy_feed_repo=$LEGACY_FEED_REPO" >> "$GITHUB_OUTPUT"
-          echo "publish_legacy_appcasts=$PUBLISH_LEGACY_APPCASTS" >> "$GITHUB_OUTPUT"
-          echo "legacy_homebrew_alias_mode=$LEGACY_HOMEBREW_ALIAS_MODE" >> "$GITHUB_OUTPUT"
-
-      - name: Verify changelog entry exists
+          APPROVED_RELEASE_BRANCH: main
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_TAG: ${{ github.ref_name }}
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/release_notes_from_changelog.py --tag "${{ steps.meta.outputs.tag }}" > /dev/null
+          if [[ "$DEFAULT_BRANCH" != "$APPROVED_RELEASE_BRANCH" ]]; then
+            echo "::error::Repository default branch $DEFAULT_BRANCH is not approved release source $APPROVED_RELEASE_BRANCH"
+            exit 1
+          fi
+          [[ "$(git rev-parse HEAD)" == "$RELEASE_SHA" ]]
+          [[ "$(git rev-parse "${RELEASE_TAG}^{commit}")" == "$RELEASE_SHA" ]]
+          git show-ref --verify --quiet "refs/remotes/origin/$APPROVED_RELEASE_BRANCH"
+          if ! git merge-base --is-ancestor "$RELEASE_SHA" "refs/remotes/origin/$APPROVED_RELEASE_BRANCH"; then
+            echo "::error::Release tag $RELEASE_TAG does not belong to $APPROVED_RELEASE_BRANCH"
+            exit 1
+          fi
 
-  build-macos:
+      - name: Resolve and validate release metadata
+        id: meta
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 scripts/release/release_metadata.py --tag "$RELEASE_TAG" --github-output
+          python3 scripts/release/validate_release_contract.py --tag "$RELEASE_TAG"
+          python3 scripts/release_notes_from_changelog.py --tag "$RELEASE_TAG" >/dev/null
+
+  release-gate:
     needs: prepare
     strategy:
       fail-fast: false
       matrix:
         include:
           - runner: macos-15
-            arch: arm64
+            host_arch: arm64
             xcode_arch: arm64
-            channel: stable
-            product_name: Dockmint
-            package_prefix: Dockmint
-            app_icon: AppIcon
-          - runner: macos-15
-            arch: x64
+          - runner: macos-15-intel
+            host_arch: x86_64
             xcode_arch: x86_64
-            channel: stable
-            product_name: Dockmint
-            package_prefix: Dockmint
-            app_icon: AppIcon
-          - runner: macos-15
-            arch: arm64
-            xcode_arch: arm64
-            channel: beta
-            product_name: Dockmint Beta
-            package_prefix: Dockmint-Beta
-            app_icon: AppIconBeta
-          - runner: macos-15
-            arch: x64
-            xcode_arch: x86_64
-            channel: beta
-            product_name: Dockmint Beta
-            package_prefix: Dockmint-Beta
-            app_icon: AppIconBeta
     runs-on: ${{ matrix.runner }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ needs.prepare.outputs.tag }}
+          persist-credentials: false
 
-      - name: Import signing certificate
+      - name: Verify native runner
+        run: test "$(uname -m)" = "${{ matrix.host_arch }}"
+
+      - name: Run deterministic release tests
+        run: |
+          python3 -m unittest discover -s scripts/release/tests -v
+          python3 -m py_compile scripts/release/*.py
+          python3 scripts/release/validate_release_contract.py --tag "${{ needs.prepare.outputs.tag }}"
+          ./scripts/run_decision_engine_tests.sh
+          xcodebuild test \
+            -project Dockmint.xcodeproj \
+            -scheme Dockmint \
+            -destination 'platform=macOS' \
+            ARCHS="${{ matrix.xcode_arch }}" \
+            ONLY_ACTIVE_ARCH=YES \
+            CODE_SIGNING_ALLOWED=NO
+
+  build-macos:
+    needs:
+      - prepare
+      - release-gate
+    environment: release-signing
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.release_matrix) }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          persist-credentials: false
+
+      - name: Verify native runner
+        run: test "$(uname -m)" = "${{ matrix.host_arch }}"
+
+      - name: Build, sign, notarize, and package
         shell: bash
         env:
           APPLE_SIGNING_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_SIGNING_CERTIFICATE_P12_BASE64 }}
           APPLE_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_SIGNING_CERTIFICATE_PASSWORD }}
-        run: |
-          set -euo pipefail
-
-          test -n "$APPLE_SIGNING_CERTIFICATE_P12_BASE64"
-          test -n "$APPLE_SIGNING_CERTIFICATE_PASSWORD"
-
-          CERT_PATH="$RUNNER_TEMP/dockmint-signing.p12"
-          KEYCHAIN_PATH="$RUNNER_TEMP/dockmint.keychain-db"
-          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
-
-          python3 -c 'import base64, pathlib, sys; pathlib.Path(sys.argv[1]).write_bytes(base64.b64decode(sys.argv[2]))' "$CERT_PATH" "$APPLE_SIGNING_CERTIFICATE_P12_BASE64"
-
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security list-keychains -d user -s "$KEYCHAIN_PATH"
-          security import "$CERT_PATH" \
-            -k "$KEYCHAIN_PATH" \
-            -P "$APPLE_SIGNING_CERTIFICATE_PASSWORD" \
-            -T /usr/bin/codesign \
-            -T /usr/bin/security
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
-      - name: Resolve Swift packages with retry
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          SOURCE_PACKAGES_DIR="$RUNNER_TEMP/SourcePackages-${{ matrix.channel }}-${{ matrix.arch }}"
-          rm -rf "$SOURCE_PACKAGES_DIR"
-          mkdir -p "$SOURCE_PACKAGES_DIR"
-
-          for attempt in 1 2 3; do
-            if xcodebuild \
-              -project Dockmint.xcodeproj \
-              -scheme Dockmint \
-              -resolvePackageDependencies \
-              -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR"; then
-              exit 0
-            fi
-
-            if [[ "$attempt" -eq 3 ]]; then
-              echo "::error::Swift package resolution failed after $attempt attempts."
-              exit 1
-            fi
-
-            sleep $((attempt * 10))
-          done
-
-      - name: Build signed app archive
-        shell: bash
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_SIGNING_CERTIFICATE_SHA256: ${{ vars.APPLE_SIGNING_CERTIFICATE_SHA256 }}
+          APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          APPLE_NOTARYTOOL_KEY_ID: ${{ vars.APPLE_NOTARYTOOL_KEY_ID }}
+          APPLE_NOTARYTOOL_ISSUER_ID: ${{ vars.APPLE_NOTARYTOOL_ISSUER_ID }}
+          APPLE_NOTARYTOOL_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARYTOOL_KEY_P8_BASE64 }}
+          VERSION: ${{ needs.prepare.outputs.version }}
           VERSION_CORE: ${{ needs.prepare.outputs.version_core }}
           BUILD_NUMBER: ${{ needs.prepare.outputs.build_number }}
-          STABLE_BUNDLE_ID: ${{ needs.prepare.outputs.stable_bundle_id }}
-          BETA_BUNDLE_ID: ${{ needs.prepare.outputs.beta_bundle_id }}
-          FEED_REPO: ${{ needs.prepare.outputs.feed_repo }}
         run: |
           set -euo pipefail
+          for variable in \
+            APPLE_SIGNING_CERTIFICATE_P12_BASE64 \
+            APPLE_SIGNING_CERTIFICATE_PASSWORD \
+            APPLE_SIGNING_CERTIFICATE_SHA256 \
+            APPLE_SIGNING_IDENTITY \
+            APPLE_TEAM_ID \
+            APPLE_NOTARYTOOL_KEY_ID \
+            APPLE_NOTARYTOOL_ISSUER_ID \
+            APPLE_NOTARYTOOL_KEY_P8_BASE64; do
+            test -n "${!variable:-}" || { echo "::error::Missing $variable"; exit 1; }
+          done
 
-          test -n "$APPLE_SIGNING_IDENTITY"
-          test -n "$APPLE_TEAM_ID"
+          SECURE_DIR="$(mktemp -d "$RUNNER_TEMP/dockmint-release.XXXXXX")"
+          chmod 700 "$SECURE_DIR"
+          KEYCHAIN="$SECURE_DIR/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+          P12_PATH="$SECURE_DIR/signing.p12"
+          P8_PATH="$SECURE_DIR/AuthKey_${APPLE_NOTARYTOOL_KEY_ID}.p8"
+          CERT_PATH="$SECURE_DIR/leaf.pem"
+          ORIGINAL_KEYCHAINS=()
+          while IFS= read -r keychain; do
+            keychain="${keychain#\"}"
+            keychain="${keychain%\"}"
+            ORIGINAL_KEYCHAINS+=("$keychain")
+          done < <(security list-keychains -d user | sed 's/^[[:space:]]*//')
+          cleanup() {
+            if (( ${#ORIGINAL_KEYCHAINS[@]} )); then
+              security list-keychains -d user -s "${ORIGINAL_KEYCHAINS[@]}" || true
+            fi
+            security delete-keychain "$KEYCHAIN" >/dev/null 2>&1 || true
+            rm -rf "$SECURE_DIR"
+          }
+          trap cleanup EXIT
 
-          ARCHIVE_PATH="$RUNNER_TEMP/${{ matrix.package_prefix }}-${{ matrix.arch }}.xcarchive"
-          EXPORT_PATH="$RUNNER_TEMP/export-${{ matrix.package_prefix }}-${{ matrix.arch }}"
-          EXPORT_OPTIONS_PATH="$RUNNER_TEMP/export-options-${{ matrix.package_prefix }}-${{ matrix.arch }}.plist"
-          SOURCE_PACKAGES_DIR="$RUNNER_TEMP/SourcePackages-${{ matrix.channel }}-${{ matrix.arch }}"
-          if [[ "${{ matrix.channel }}" == "beta" ]]; then
-            BUNDLE_ID="$BETA_BUNDLE_ID"
-          else
-            BUNDLE_ID="$STABLE_BUNDLE_ID"
-          fi
+          export P12_PATH P8_PATH
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+          for path_name, environment_name in (
+              ("P12_PATH", "APPLE_SIGNING_CERTIFICATE_P12_BASE64"),
+              ("P8_PATH", "APPLE_NOTARYTOOL_KEY_P8_BASE64"),
+          ):
+              path = Path(os.environ[path_name])
+              path.write_bytes(base64.b64decode(os.environ[environment_name], validate=True))
+              path.chmod(0o600)
+          PY
+          openssl pkcs12 -in "$P12_PATH" -clcerts -nokeys \
+            -passin env:APPLE_SIGNING_CERTIFICATE_PASSWORD -out "$CERT_PATH"
+          chmod 600 "$CERT_PATH"
+          actual_fingerprint="$(openssl x509 -in "$CERT_PATH" -outform DER | shasum -a 256 | awk '{print toupper($1)}')"
+          expected_fingerprint="$(printf '%s' "$APPLE_SIGNING_CERTIFICATE_SHA256" | tr -cd '[:xdigit:]' | tr '[:lower:]' '[:upper:]')"
+          test "$actual_fingerprint" = "$expected_fingerprint"
+          subject="$(openssl x509 -in "$CERT_PATH" -noout -subject -nameopt RFC2253)"
+          [[ "$subject" == *"CN=$APPLE_SIGNING_IDENTITY"* ]]
+          [[ "$subject" == *"OU=$APPLE_TEAM_ID"* ]]
 
-          xcodebuild \
-            -project Dockmint.xcodeproj \
-            -scheme Dockmint \
-            -configuration Release \
-            -destination "generic/platform=macOS" \
-            -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
-            -archivePath "$ARCHIVE_PATH" \
-            archive \
-            ARCHS="${{ matrix.xcode_arch }}" \
-            ONLY_ACTIVE_ARCH=YES \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="$APPLE_SIGNING_IDENTITY" \
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$P12_PATH" -k "$KEYCHAIN" -P "$APPLE_SIGNING_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" "${ORIGINAL_KEYCHAINS[@]}"
+          security find-identity -v -p codesigning "$KEYCHAIN" | grep -F "$APPLE_SIGNING_IDENTITY"
+
+          SOURCE_PACKAGES="$RUNNER_TEMP/SourcePackages-${{ matrix.channel }}-${{ matrix.arch }}"
+          xcodebuild -project Dockmint.xcodeproj -scheme Dockmint \
+            -resolvePackageDependencies -clonedSourcePackagesDirPath "$SOURCE_PACKAGES"
+          ARCHIVE="$RUNNER_TEMP/${{ matrix.package_prefix }}-${{ matrix.arch }}.xcarchive"
+          EXPORT="$RUNNER_TEMP/export-${{ matrix.package_prefix }}-${{ matrix.arch }}"
+          EXPORT_OPTIONS="$SECURE_DIR/export-options.plist"
+          xcodebuild -project Dockmint.xcodeproj -scheme Dockmint -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -clonedSourcePackagesDirPath "$SOURCE_PACKAGES" \
+            -archivePath "$ARCHIVE" archive \
+            ARCHS="${{ matrix.xcode_arch }}" ONLY_ACTIVE_ARCH=YES \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$APPLE_SIGNING_IDENTITY" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            MARKETING_VERSION="$VERSION_CORE" \
-            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            MARKETING_VERSION="$VERSION_CORE" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             PRODUCT_NAME="${{ matrix.product_name }}" \
-            PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
+            PRODUCT_BUNDLE_IDENTIFIER="${{ matrix.bundle_id }}" \
             ASSETCATALOG_COMPILER_APPICON_NAME="${{ matrix.app_icon }}" \
-            SU_FEED_URL="https://raw.githubusercontent.com/${FEED_REPO}/main/appcasts/${{ matrix.channel }}-${{ matrix.arch }}.xml" \
-            OTHER_CODE_SIGN_FLAGS="--timestamp"
-
-          cat > "$EXPORT_OPTIONS_PATH" <<EOF
+            SU_FEED_URL="https://raw.githubusercontent.com/apotenza92/dockmint/main/appcasts/${{ matrix.channel }}-${{ matrix.arch }}.xml" \
+            OTHER_CODE_SIGN_FLAGS='--timestamp'
+          cat > "$EXPORT_OPTIONS" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>developer-id</string>
-            <key>signingStyle</key>
-            <string>manual</string>
-            <key>signingCertificate</key>
-            <string>${APPLE_SIGNING_IDENTITY}</string>
-            <key>teamID</key>
-            <string>${APPLE_TEAM_ID}</string>
-          </dict>
-          </plist>
+          <plist version="1.0"><dict>
+          <key>method</key><string>developer-id</string>
+          <key>signingStyle</key><string>manual</string>
+          <key>signingCertificate</key><string>${APPLE_SIGNING_IDENTITY}</string>
+          <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+          </dict></plist>
           EOF
+          xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportPath "$EXPORT" \
+            -exportOptionsPlist "$EXPORT_OPTIONS"
 
-          xcodebuild \
-            -exportArchive \
-            -archivePath "$ARCHIVE_PATH" \
-            -exportPath "$EXPORT_PATH" \
-            -exportOptionsPlist "$EXPORT_OPTIONS_PATH"
+          APP="$EXPORT/${{ matrix.product_name }}.app"
+          test -d "$APP"
+          NOTARY_UPLOAD="$SECURE_DIR/notary-upload.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$NOTARY_UPLOAD"
+          SUBMIT_JSON="$SECURE_DIR/notary-submit.json"
+          xcrun notarytool submit "$NOTARY_UPLOAD" \
+            --key "$P8_PATH" --key-id "$APPLE_NOTARYTOOL_KEY_ID" \
+            --issuer "$APPLE_NOTARYTOOL_ISSUER_ID" --wait --output-format json > "$SUBMIT_JSON"
+          submission_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("id", ""))' "$SUBMIT_JSON")"
+          submission_status="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("status", ""))' "$SUBMIT_JSON")"
+          test -n "$submission_id"
+          mkdir -p out evidence
+          NOTARY_LOG="evidence/notary-${{ matrix.channel }}-${{ matrix.arch }}.json"
+          xcrun notarytool log "$submission_id" \
+            --key "$P8_PATH" --key-id "$APPLE_NOTARYTOOL_KEY_ID" \
+            --issuer "$APPLE_NOTARYTOOL_ISSUER_ID" --output-format json > "$NOTARY_LOG"
+          python3 -c 'import sys; sys.path.insert(0,"scripts/release"); from verify_macos_package import validate_notarization_log; from pathlib import Path; validate_notarization_log(Path(sys.argv[1]))' "$NOTARY_LOG"
+          test "$submission_status" = Accepted
+          xcrun stapler staple -v "$APP"
 
-          APP_PATH="$EXPORT_PATH/${{ matrix.product_name }}.app"
-          if [[ ! -d "$APP_PATH" ]]; then
-            echo "::error::Expected app bundle not found at $APP_PATH"
-            exit 1
-          fi
-
-          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
-
-          mkdir -p dist
-          cp -R "$APP_PATH" "dist/${{ matrix.product_name }}.app"
-
-      - name: Notarize and staple with notarytool
-        shell: bash
-        env:
-          APPLE_NOTARYTOOL_KEY_ID: ${{ secrets.APPLE_NOTARYTOOL_KEY_ID }}
-          APPLE_NOTARYTOOL_ISSUER_ID: ${{ secrets.APPLE_NOTARYTOOL_ISSUER_ID }}
-          APPLE_NOTARYTOOL_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARYTOOL_KEY_P8_BASE64 }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-
-          MODE=""
-          if [[ -n "${APPLE_NOTARYTOOL_KEY_ID:-}" && -n "${APPLE_NOTARYTOOL_ISSUER_ID:-}" && -n "${APPLE_NOTARYTOOL_KEY_P8_BASE64:-}" ]]; then
-            MODE="api_key"
-          elif [[ -n "${APPLE_ID:-}" && -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" && -n "${APPLE_TEAM_ID:-}" ]]; then
-            MODE="apple_id"
-          else
-            echo "::error::Missing notarization credentials. Configure either notarytool API key secrets or APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID."
-            exit 1
-          fi
-
-          KEY_PATH=""
-          if [[ "$MODE" == "api_key" ]]; then
-            KEY_PATH="$RUNNER_TEMP/AuthKey_${APPLE_NOTARYTOOL_KEY_ID}.p8"
-            python3 -c 'import base64, pathlib, sys; pathlib.Path(sys.argv[1]).write_bytes(base64.b64decode(sys.argv[2]))' "$KEY_PATH" "$APPLE_NOTARYTOOL_KEY_P8_BASE64"
-          fi
-
-          APP_PATH="dist/${{ matrix.product_name }}.app"
-          UPLOAD_ZIP="$RUNNER_TEMP/notary-upload.zip"
-
-          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$UPLOAD_ZIP"
-
-          SUBMIT_JSON=""
-
-          if [[ "$MODE" == "api_key" ]]; then
-            SUBMIT_JSON="$(xcrun notarytool submit "$UPLOAD_ZIP" \
-              --key "$KEY_PATH" \
-              --key-id "$APPLE_NOTARYTOOL_KEY_ID" \
-              --issuer "$APPLE_NOTARYTOOL_ISSUER_ID" \
-              --wait \
-              --output-format json)"
-          else
-            SUBMIT_JSON="$(xcrun notarytool submit "$UPLOAD_ZIP" \
-              --apple-id "$APPLE_ID" \
-              --team-id "$APPLE_TEAM_ID" \
-              --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-              --wait \
-              --output-format json)"
-          fi
-
-          echo "$SUBMIT_JSON"
-
-          SUBMISSION_ID="$(python3 -c 'import json,sys; data=json.loads(sys.argv[1]); print(data.get("id", ""))' "$SUBMIT_JSON")"
-          SUBMISSION_STATUS="$(python3 -c 'import json,sys; data=json.loads(sys.argv[1]); print(data.get("status", ""))' "$SUBMIT_JSON")"
-
-          if [[ -z "$SUBMISSION_ID" ]]; then
-            echo "::error::Failed to parse notary submission ID"
-            exit 1
-          fi
-
-          if [[ "$SUBMISSION_STATUS" != "Accepted" ]]; then
-            echo "::error::Notary submission status is '$SUBMISSION_STATUS' (expected 'Accepted')."
-            if [[ "$MODE" == "api_key" ]]; then
-              xcrun notarytool log "$SUBMISSION_ID" \
-                --key "$KEY_PATH" \
-                --key-id "$APPLE_NOTARYTOOL_KEY_ID" \
-                --issuer "$APPLE_NOTARYTOOL_ISSUER_ID" \
-                --output-format json || true
-            else
-              xcrun notarytool log "$SUBMISSION_ID" \
-                --apple-id "$APPLE_ID" \
-                --team-id "$APPLE_TEAM_ID" \
-                --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-                --output-format json || true
-            fi
-            exit 1
-          fi
-
-          xcrun stapler staple -v "$APP_PATH"
-
-      - name: Package release zip
-        shell: bash
-        env:
-          VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          set -euo pipefail
-
-          mkdir -p out
           PACKAGE="${{ matrix.package_prefix }}-v${VERSION}-macos-${{ matrix.arch }}.zip"
-          ditto -c -k --sequesterRsrc --keepParent "dist/${{ matrix.product_name }}.app" "out/$PACKAGE"
-          ls -lah out
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "out/$PACKAGE"
+          (cd out && shasum -a 256 "$PACKAGE" > "$PACKAGE.sha256")
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Verify package without credentials
+        shell: bash
+        env:
+          APPLE_SIGNING_CERTIFICATE_SHA256: ${{ vars.APPLE_SIGNING_CERTIFICATE_SHA256 }}
+          APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          BUILD_NUMBER: ${{ needs.prepare.outputs.build_number }}
+        run: |
+          set -euo pipefail
+          PACKAGE="${{ matrix.package_prefix }}-v${VERSION}-macos-${{ matrix.arch }}.zip"
+          NOTARY_LOG="evidence/notary-${{ matrix.channel }}-${{ matrix.arch }}.json"
+          python3 scripts/release/verify_macos_package.py \
+            --zip "out/$PACKAGE" --checksum "out/$PACKAGE.sha256" \
+            --notarization-log "$NOTARY_LOG" \
+            --channel "${{ matrix.channel }}" --arch "${{ matrix.arch }}" \
+            --version "$VERSION" --build-number "$BUILD_NUMBER" \
+            --identity "$APPLE_SIGNING_IDENTITY" --team-id "$APPLE_TEAM_ID" \
+            --certificate-sha256 "$APPLE_SIGNING_CERTIFICATE_SHA256"
+
+      - name: Attest release package provenance
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: out/*.zip
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-macos-${{ matrix.channel }}-${{ matrix.arch }}
-          path: out/*
+          path: |
+            out/*.zip
+            out/*.sha256
           if-no-files-found: error
 
-  publish-release:
+      - name: Upload notarization evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: notarization-${{ matrix.channel }}-${{ matrix.arch }}
+          path: evidence/*.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  verify-release-policy:
+    name: Require immutable releases
+    needs:
+      - prepare
+    runs-on: ubuntu-24.04
+    environment: release-policy
+    permissions:
+      contents: read
+    steps:
+      - name: Verify immutable releases are enabled
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.IMMUTABLE_RELEASES_READ_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          if ! enabled="$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/$GH_REPO/immutable-releases" \
+            --jq '.enabled')"; then
+            echo '::error::Unable to confirm immutable releases with the Administration:read policy token'
+            exit 1
+          fi
+          if [[ "$enabled" != true ]]; then
+            echo '::error::Immutable releases must be enabled before publication'
+            exit 1
+          fi
+
+  stage-draft-release:
     needs:
       - prepare
       - build-macos
-    runs-on: ubuntu-latest
+      - verify-release-policy
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
+      - name: Checkout release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          persist-credentials: false
       - name: Download release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: release-macos-*
           merge-multiple: true
           path: dist
-
-      - name: Publish GitHub release
+      - name: Create immutable draft asset set
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.prepare.outputs.tag }}
           PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
-        shell: bash
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
+          NOTES="$RUNNER_TEMP/release-notes.md"
+          python3 scripts/release_notes_from_changelog.py --tag "$TAG" > "$NOTES"
 
-          NOTES_FILE="$RUNNER_TEMP/release-notes.md"
-          python3 scripts/release_notes_from_changelog.py --tag "$TAG" > "$NOTES_FILE"
+          EXPECTED="$RUNNER_TEMP/expected-assets.txt"
+          prefixes=(Dockmint-Beta)
+          if [[ "$PRERELEASE" != "true" ]]; then
+            prefixes=(Dockmint "${prefixes[@]}")
+          fi
+          for prefix in "${prefixes[@]}"; do
+            for arch in arm64 x64; do
+              printf '%s\n' "${prefix}-v${VERSION}-macos-${arch}.zip"
+              printf '%s\n' "${prefix}-v${VERSION}-macos-${arch}.zip.sha256"
+            done
+          done | sort > "$EXPECTED"
+          find dist -maxdepth 1 -type f -exec basename {} \; | sort > "$RUNNER_TEMP/local-assets.txt"
+          diff -u "$EXPECTED" "$RUNNER_TEMP/local-assets.txt"
 
           if gh release view "$TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
-            gh release edit "$TAG" --notes-file "$NOTES_FILE" --repo "$GH_REPO"
-            gh release upload "$TAG" dist/* --clobber --repo "$GH_REPO"
-            exit 0
-          fi
-
-          if [[ "$PRERELEASE" == "true" ]]; then
-            gh release create "$TAG" dist/* --title "$TAG" --notes-file "$NOTES_FILE" --prerelease --repo "$GH_REPO"
+            test "$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .draft)" = true || {
+              echo "::error::Refusing to mutate an already-published release"
+              exit 1
+            }
           else
-            gh release create "$TAG" dist/* --title "$TAG" --notes-file "$NOTES_FILE" --repo "$GH_REPO"
+            if [[ "$PRERELEASE" == "true" ]]; then
+              gh release create "$TAG" --title "$TAG" --notes-file "$NOTES" --draft --prerelease --repo "$GH_REPO"
+            else
+              gh release create "$TAG" --title "$TAG" --notes-file "$NOTES" --draft --repo "$GH_REPO"
+            fi
           fi
 
-  update-sparkle-appcasts:
+          gh api "repos/$GH_REPO/releases/tags/$TAG" --paginate --jq '.assets[].name' | sort > "$RUNNER_TEMP/remote-before.txt"
+          if comm -13 "$EXPECTED" "$RUNNER_TEMP/remote-before.txt" | grep -q .; then
+            echo "::error::Draft contains unexpected assets"
+            comm -13 "$EXPECTED" "$RUNNER_TEMP/remote-before.txt"
+            exit 1
+          fi
+
+          while IFS= read -r asset; do
+            if grep -Fxq "$asset" "$RUNNER_TEMP/remote-before.txt"; then
+              existing="$RUNNER_TEMP/existing-$asset"
+              gh release download "$TAG" --repo "$GH_REPO" --pattern "$asset" --dir "$RUNNER_TEMP"
+              mv "$RUNNER_TEMP/$asset" "$existing"
+              cmp "dist/$asset" "$existing"
+            else
+              gh release upload "$TAG" "dist/$asset" --repo "$GH_REPO"
+            fi
+          done < "$EXPECTED"
+
+          gh api "repos/$GH_REPO/releases/tags/$TAG" --paginate --jq '.assets[].name' | sort > "$RUNNER_TEMP/remote-after.txt"
+          diff -u "$EXPECTED" "$RUNNER_TEMP/remote-after.txt"
+          mkdir "$RUNNER_TEMP/redownloaded"
+          gh release download "$TAG" --repo "$GH_REPO" --dir "$RUNNER_TEMP/redownloaded"
+          while IFS= read -r asset; do cmp "dist/$asset" "$RUNNER_TEMP/redownloaded/$asset"; done < "$EXPECTED"
+          for checksum in "$RUNNER_TEMP"/redownloaded/*.sha256; do
+            (cd "$RUNNER_TEMP/redownloaded" && shasum -a 256 -c "$(basename "$checksum")")
+          done
+
+  generate-signed-appcasts:
     needs:
       - prepare
-      - publish-release
-    runs-on: macos-15
+      - stage-draft-release
+    permissions:
+      contents: read
+    environment: sparkle-signing
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout main branch
-        uses: actions/checkout@v4
+      - name: Checkout reviewed release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: main
-
-      - name: Update Sparkle appcast files
+          ref: ${{ needs.prepare.outputs.tag }}
+          persist-credentials: false
+      - name: Install pinned public dependencies
+        run: python3 -m pip install --quiet 'cryptography==45.0.7'
+      - name: Download immutable draft assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${{ needs.prepare.outputs.tag }}" --repo "${{ github.repository }}" --pattern '*.zip' --dir candidate-assets
+      - name: Generate signed candidate appcasts
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
         run: |
-          set -euo pipefail
           python3 scripts/release/update_sparkle_appcasts.py \
-            --repo "${{ github.repository }}" \
-            --output-dir appcasts \
-            --github-token "$GITHUB_TOKEN" \
-            --require-signatures
+            --repo "${{ github.repository }}" --output-dir generated-appcasts \
+            --github-token "$GITHUB_TOKEN" --require-signatures \
+            --candidate-tag "${{ needs.prepare.outputs.tag }}"
+      - name: Download any N-1 assets retained by stable feeds
+        run: |
+          python3 - <<'PY'
+          import urllib.request
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          from urllib.parse import urlparse
 
-      - name: Commit and push appcast updates
+          assets = Path("candidate-assets")
+          for feed in Path("generated-appcasts").glob("*.xml"):
+              enclosure = ET.parse(feed).getroot().find("./channel/item/enclosure")
+              if enclosure is None or not enclosure.get("url"):
+                  raise SystemExit(f"{feed} has no enclosure")
+              url = enclosure.get("url")
+              destination = assets / Path(urlparse(url).path).name
+              if not destination.exists():
+                  urllib.request.urlretrieve(url, destination)
+          PY
+      - name: Verify bundled public key, signatures, and tamper rejection
+        run: |
+          python3 scripts/release/verify_sparkle_appcasts.py \
+            --info-plist Dockmint/Info.plist \
+            --appcast-dir generated-appcasts \
+            --asset-dir candidate-assets
+      - name: Upload reviewed appcasts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: signed-appcasts
+          path: generated-appcasts/*.xml
+          if-no-files-found: error
+
+  sparkle-update-gate:
+    needs:
+      - prepare
+      - generate-signed-appcasts
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.release_matrix) }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout reviewed release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          persist-credentials: false
+      - name: Verify native runner
+        run: test "$(uname -m)" = "${{ matrix.host_arch }}"
+      - name: Download reviewed appcasts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: signed-appcasts
+          path: signed-appcasts
+      - name: Download candidate and current N-1 package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir packages
+          candidate="${{ matrix.package_prefix }}-v${VERSION}-macos-${{ matrix.arch }}.zip"
+          gh release download "$TAG" --repo "${{ github.repository }}" --pattern "$candidate" --dir packages
+          current_feed="https://raw.githubusercontent.com/${{ github.repository }}/main/appcasts/${{ matrix.channel }}-${{ matrix.arch }}.xml"
+          previous_url="$(python3 - "$current_feed" <<'PY'
+          import sys, urllib.request, xml.etree.ElementTree as ET
+          with urllib.request.urlopen(sys.argv[1], timeout=30) as response:
+              root = ET.fromstring(response.read())
+          enclosure = root.find('./channel/item/enclosure')
+          if enclosure is None or not enclosure.get('url'):
+              raise SystemExit('current appcast has no enclosure')
+          print(enclosure.get('url'))
+          PY
+          )"
+          curl --fail --location --retry 3 "$previous_url" --output packages/previous.zip
+      - name: Run N-1 Sparkle install and relaunch gate
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          APPLE_SIGNING_CERTIFICATE_SHA256: ${{ vars.APPLE_SIGNING_CERTIFICATE_SHA256 }}
+          APPLE_PRIOR_SIGNING_CERTIFICATE_SHA256: ${{ vars.APPLE_PRIOR_SIGNING_CERTIFICATE_SHA256 }}
+          APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          for variable in \
+            APPLE_SIGNING_CERTIFICATE_SHA256 \
+            APPLE_PRIOR_SIGNING_CERTIFICATE_SHA256 \
+            APPLE_SIGNING_IDENTITY \
+            APPLE_TEAM_ID; do
+            test -n "${!variable:-}" || { echo "::error::Missing $variable"; exit 1; }
+          done
+          python3 scripts/release/run_sparkle_update_gate.py \
+            --previous-zip packages/previous.zip \
+            --candidate-zip "packages/${{ matrix.package_prefix }}-v${VERSION}-macos-${{ matrix.arch }}.zip" \
+            --candidate-appcast "signed-appcasts/${{ matrix.channel }}-${{ matrix.arch }}.xml" \
+            --channel "${{ matrix.channel }}" --arch "${{ matrix.arch }}" \
+            --expected-version "$VERSION" \
+            --identity "$APPLE_SIGNING_IDENTITY" --team-id "$APPLE_TEAM_ID" \
+            --candidate-certificate-sha256 "$APPLE_SIGNING_CERTIFICATE_SHA256" \
+            --prior-certificate-sha256 "$APPLE_PRIOR_SIGNING_CERTIFICATE_SHA256"
+
+  publish-release:
+    needs:
+      - prepare
+      - sparkle-update-gate
+      - verify-release-policy
+    permissions:
+      contents: write
+    environment: ${{ needs.prepare.outputs.prerelease == 'true' && 'beta-release' || 'stable-release' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Publish verified draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .draft)" = true
+          gh release edit "$TAG" --repo "$GH_REPO" \
+            --draft=false --prerelease="$PRERELEASE" \
+            --latest="$([[ "$PRERELEASE" == true ]] && echo false || echo true)"
+          immutable=false
+          for _ in {1..12}; do
+            immutable="$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .immutable)"
+            [[ "$immutable" == true ]] && break
+            sleep 5
+          done
+          if [[ "$immutable" != true ]]; then
+            echo "Published release is not immutable; refusing to publish Sparkle or Homebrew references" >&2
+            exit 1
+          fi
+
+  prepare-sparkle-publication:
+    needs:
+      - prepare
+      - generate-signed-appcasts
+      - publish-release
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download reviewed appcasts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: signed-appcasts
+          path: publication/appcasts
+      - name: Seal appcast publication bundle
         env:
           TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           set -euo pipefail
+          files="$(find publication/appcasts -maxdepth 1 -type f -name '*.xml' -exec basename {} \; | LC_ALL=C sort | paste -sd ' ' -)"
+          [[ "$files" == 'beta-arm64.xml beta-x64.xml stable-arm64.xml stable-x64.xml' ]]
+          (
+            cd publication
+            find appcasts -type f -name '*.xml' -print0 |
+              LC_ALL=C sort -z |
+              xargs -0 sha256sum > SHA256SUMS
+          )
+          printf '%s\n' \
+            "Dockmint appcast publication bundle" \
+            "release-tag=${TAG}" \
+            "release-commit=${{ github.sha }}" \
+            "destination=appcasts/" \
+            "Apply these exact reviewed bytes manually after the release approval gate." \
+            > publication/PUBLICATION.txt
+      - name: Upload appcast publication bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dockmint-appcast-publication-${{ needs.prepare.outputs.tag }}
+          path: publication
+          if-no-files-found: error
+          retention-days: 14
 
-          if git diff --quiet -- appcasts; then
-            echo "No Sparkle appcast changes to commit."
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add appcasts/*.xml
-          git commit -m "chore: update Sparkle appcasts for ${TAG}"
-          git push origin HEAD:main
-
-      - name: Check legacy feed mirror requirements
-        id: legacy_feed
-        env:
-          CURRENT_REPOSITORY: ${{ github.repository }}
-          LEGACY_FEED_REPO: ${{ needs.prepare.outputs.legacy_feed_repo }}
-          PUBLISH_LEGACY_APPCASTS: ${{ needs.prepare.outputs.publish_legacy_appcasts }}
-          LEGACY_FEED_GITHUB_TOKEN: ${{ secrets.LEGACY_FEED_GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          if [[ "$PUBLISH_LEGACY_APPCASTS" != "true" ]]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [[ "$LEGACY_FEED_REPO" == "$CURRENT_REPOSITORY" ]]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [[ -z "${LEGACY_FEED_GITHUB_TOKEN:-}" ]]; then
-            echo "::warning::LEGACY_FEED_GITHUB_TOKEN is not configured; skipping legacy Sparkle feed mirror for ${LEGACY_FEED_REPO}."
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "enabled=true" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout legacy feed repo
-        if: ${{ steps.legacy_feed.outputs.enabled == 'true' }}
-        env:
-          LEGACY_FEED_GITHUB_TOKEN: ${{ secrets.LEGACY_FEED_GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          git clone "https://x-access-token:${LEGACY_FEED_GITHUB_TOKEN}@github.com/${{ needs.prepare.outputs.legacy_feed_repo }}.git" /tmp/legacy-feed-repo
-
-      - name: Update legacy Sparkle appcast files
-        if: ${{ steps.legacy_feed.outputs.enabled == 'true' }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
-        run: |
-          set -euo pipefail
-          python3 scripts/release/update_sparkle_appcasts.py \
-            --repo "${{ github.repository }}" \
-            --output-dir /tmp/legacy-feed-repo/appcasts \
-            --github-token "$GITHUB_TOKEN" \
-            --require-signatures
-
-      - name: Commit and push legacy appcast updates
-        if: ${{ steps.legacy_feed.outputs.enabled == 'true' }}
-        env:
-          TAG: ${{ needs.prepare.outputs.tag }}
-        run: |
-          set -euo pipefail
-          cd /tmp/legacy-feed-repo
-
-          if git diff --quiet -- appcasts; then
-            echo "No legacy Sparkle appcast changes to commit."
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add appcasts/*.xml
-          git commit -m "chore: mirror Dockmint appcasts for ${TAG}"
-          git push origin HEAD:main
-
-  update-homebrew-tap:
+  generate-homebrew-casks:
     needs:
       - prepare
       - publish-release
-    runs-on: ubuntu-latest
+      - prepare-sparkle-publication
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
-      - name: Check Homebrew tap token
-        id: tap
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        shell: bash
-        run: |
-          if [[ -n "${HOMEBREW_TAP_TOKEN:-}" ]]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "HOMEBREW_TAP_TOKEN not set; skipping tap update."
-          fi
-
-      - name: Checkout Dockmint
-        if: ${{ steps.tap.outputs.enabled == 'true' }}
-        uses: actions/checkout@v4
-
-      - name: Clone homebrew tap
-        if: ${{ steps.tap.outputs.enabled == 'true' }}
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/apotenza92/homebrew-tap.git" /tmp/homebrew-tap
-
-      - name: Update Dockmint casks
-        if: ${{ steps.tap.outputs.enabled == 'true' }}
+      - name: Checkout reviewed release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          persist-credentials: false
+      - name: Generate exact candidate casks once
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          mkdir -p reviewed-homebrew/Casks
           python3 scripts/release/update_homebrew_tap_casks.py \
-            --tap-path /tmp/homebrew-tap \
-            --repo apotenza92/dockmint \
-            --legacy-alias-mode "${{ needs.prepare.outputs.legacy_homebrew_alias_mode }}"
+            --tap-path reviewed-homebrew --repo apotenza92/dockmint
+          casks="$(find reviewed-homebrew/Casks -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort | paste -sd ' ' -)"
+          [[ "$casks" == 'dockmint.rb dockmint@beta.rb' ]]
+      - name: Upload exact candidate casks
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: reviewed-homebrew-casks
+          path: reviewed-homebrew/Casks
+          if-no-files-found: error
 
-      - name: Commit and push tap updates
-        if: ${{ steps.tap.outputs.enabled == 'true' }}
+  validate-homebrew-casks:
+    needs:
+      - prepare
+      - generate-homebrew-casks
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            host_arch: arm64
+          - runner: macos-15-intel
+            host_arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout Dockmint
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          persist-credentials: false
+      - name: Verify native runner
+        run: test "$(uname -m)" = "${{ matrix.host_arch }}"
+      - name: Download exact candidate casks
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: reviewed-homebrew-casks
+          path: reviewed-casks
+      - name: Install candidate bytes into a real Homebrew tap
+        run: |
+          set -euo pipefail
+          casks="$(find reviewed-casks -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort | paste -sd ' ' -)"
+          [[ "$casks" == 'dockmint.rb dockmint@beta.rb' ]]
+          brew tap apotenza92/tap
+          tap_path="$(brew --repository apotenza92/tap)"
+          cp reviewed-casks/dockmint.rb "$tap_path/Casks/dockmint.rb"
+          cp reviewed-casks/dockmint@beta.rb "$tap_path/Casks/dockmint@beta.rb"
+          export HOMEBREW_NO_AUTO_UPDATE=1
+          brew style --cask apotenza92/tap/dockmint apotenza92/tap/dockmint@beta
+          brew audit --cask --online apotenza92/tap/dockmint apotenza92/tap/dockmint@beta
+      - name: Install, assess, launch, and uninstall both channels
         shell: bash
         run: |
           set -euo pipefail
-          cd /tmp/homebrew-tap
+          export HOMEBREW_NO_AUTO_UPDATE=1
+          installed_cask=''
+          cleanup() {
+            if [[ -n "$installed_cask" ]]; then
+              brew uninstall --cask "$installed_cask" >/dev/null 2>&1 || true
+            fi
+          }
+          trap cleanup EXIT
+          for cask in dockmint dockmint@beta; do
+            installed_cask="apotenza92/tap/$cask"
+            brew install --cask "$installed_cask"
+            if [[ "$cask" == dockmint ]]; then app="/Applications/Dockmint.app"; else app="/Applications/Dockmint Beta.app"; fi
+            test -d "$app"
+            xcrun stapler validate "$app"
+            spctl --assess --type execute --verbose=4 "$app"
+            executable="$app/Contents/MacOS/$(plutil -extract CFBundleExecutable raw "$app/Contents/Info.plist")"
+            smoke_home="$(mktemp -d "$RUNNER_TEMP/homebrew-smoke.XXXXXX")"
+            env -i HOME="$smoke_home" TMPDIR="$RUNNER_TEMP/" \
+              PATH=/usr/bin:/bin:/usr/sbin:/sbin LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 \
+              USER=dockmint-homebrew-smoke LOGNAME=dockmint-homebrew-smoke \
+              DOCKMINT_TEST_SUITE=1 DOCKMINT_DEBUG_LOG=0 \
+              "$executable" -ApplePersistenceIgnoreState YES &
+            pid=$!
+            sleep 3
+            kill -0 "$pid"
+            kill -TERM "$pid"
+            wait "$pid" || true
+            brew uninstall --cask "$installed_cask"
+            installed_cask=''
+            test ! -e "$app"
+          done
 
-          git add -A Casks
-
-          if git diff --cached --quiet -- Casks; then
-            echo "No Homebrew cask changes to push."
-            exit 0
-          fi
-
-          git config user.name "dockmint-release-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git commit -m "Update Dockmint casks from release metadata"
-          git push origin main
+  prepare-homebrew-publication:
+    needs:
+      - prepare
+      - generate-homebrew-casks
+      - validate-homebrew-casks
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download exact casks validated on both native runners
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: reviewed-homebrew-casks
+          path: publication/Casks
+      - name: Seal Homebrew publication bundle
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          casks="$(find publication/Casks -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort | paste -sd ' ' -)"
+          [[ "$casks" == 'dockmint.rb dockmint@beta.rb' ]]
+          (
+            cd publication
+            find Casks -type f -name '*.rb' -print0 |
+              LC_ALL=C sort -z |
+              xargs -0 sha256sum > SHA256SUMS
+          )
+          printf '%s\n' \
+            "Dockmint Homebrew publication bundle" \
+            "release-tag=${TAG}" \
+            "release-commit=${{ github.sha }}" \
+            "destination=apotenza92/homebrew-tap:Casks/" \
+            "Apply these exact natively validated bytes manually after the release approval gate." \
+            > publication/PUBLICATION.txt
+      - name: Upload Homebrew publication bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dockmint-homebrew-publication-${{ needs.prepare.outputs.tag }}
+          path: publication
+          if-no-files-found: error
+          retention-days: 14
