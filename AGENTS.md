@@ -31,12 +31,12 @@ swift tools/generate_icons.swift
 ## CI and Distribution
 
 - `ci.yml`: manually invoked native ARM64 and Intel XCTest, unsigned stable/beta builds, decision-engine tests, and release-contract checks.
-- `release.yml`: native signed + notarized ARM64/Intel artifacts, strict package verification, GitHub Release publishing, Sparkle feeds, and Homebrew tap sync.
-- Release workflows are tag-push only. They stage an immutable draft, verify signatures and native N-1 Sparkle update behavior, then publish appcasts before validating and updating Homebrew.
+- `release.yml`: native signed + notarized ARM64/Intel artefacts, strict package verification, GitHub Release publishing, and checksum-sealed Sparkle/Homebrew publication bundles.
+- Release workflows are tag-push only. They stage an immutable draft, verify signatures and native N-1 Sparkle update behaviour, then prepare exact appcast and Homebrew bundles for deliberate manual publication after the release gate. Workflows do not commit or push those repository updates.
 - Beta tags run native updater gates for beta ARM64/x64 only. Stable tags run both stable and beta updater gates because a stable release can advance both feeds.
 - The shell Settings and Dock suites require a logged-in Aqua session plus Accessibility/Input Monitoring grants, so they remain a required local pre-tag gate in `scripts/release.sh`; hosted CI owns XCTest and credential-free release-contract checks.
 - `scripts/release/sparkle-update-bootstrap.json` is a source-pinned exception because the v0.4.1 packages predate the real update-test hook. Stable permits only v0.4.1 -> v0.4.2. Beta permits v0.4.1 -> v0.4.2-beta.1 when the prerelease ships first, or v0.4.1 -> v0.4.2 when the stable tag is the first Beta-feed advance. Those exact first transitions verify the candidate and its hook but cannot prove an install from v0.4.1; every later transition on that channel must install and relaunch from N-1. Never advance, broaden, or bypass this contract.
-- Homebrew casks are updated in `apotenza92/homebrew-tap`:
+- Homebrew publication bundles target `apotenza92/homebrew-tap`:
   - `dockmint`
   - `dockmint@beta`
 - Beta cask tracks whichever is newer between stable and prerelease channels.
@@ -46,8 +46,7 @@ swift tools/generate_icons.swift
 - `release-signing`: protected P12 and App Store Connect P8 credentials used only by package jobs.
 - `sparkle-signing`: tag-restricted, with the Sparkle private key used only by appcast-signing jobs.
 - `release-policy`: tag-restricted, with only `IMMUTABLE_RELEASES_READ_TOKEN`, scoped to repository Administration read and used only by the read-only immutable-release policy job.
-- `stable-release` and `beta-release`: secret-free controls used only by the final public-release job. Draft staging, updater verification, and appcast publication must not consume their approval gate.
-- `homebrew-release`: Homebrew tap token and publication controls.
+- `stable-release` and `beta-release`: secret-free controls used only by the final public-release job. Draft staging, updater verification, and publication-bundle preparation must not consume their approval gate.
 
 Environment secrets:
 
@@ -55,7 +54,6 @@ Environment secrets:
 - `APPLE_SIGNING_CERTIFICATE_PASSWORD`
 - `APPLE_NOTARYTOOL_KEY_P8_BASE64`
 - `SPARKLE_PRIVATE_ED_KEY`
-- `HOMEBREW_TAP_TOKEN`
 - `IMMUTABLE_RELEASES_READ_TOKEN`
 
 Repository variables:
