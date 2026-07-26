@@ -8,7 +8,7 @@ All notable changes to this project are documented in this file (stable and beta
 
 ## [v0.4.2-beta.1]
 
-- Hardened the hosted release pipeline for native Apple Silicon and Intel builds with required XCTest, strict Developer ID and nested Sparkle verification, notarisation, stapling, Gatekeeper assessment, checksums, immutable-release policy checks, and artifact provenance.
+- Hardened the hosted release pipeline for native Apple Silicon and Intel builds with required XCTest, strict Developer ID and nested Sparkle verification, notarisation, stapling, Gatekeeper assessment, checksums, and artifact provenance.
 - Added separate stable and beta Sparkle feeds with native N-1 verification. The first v0.4.1 migration boundary is pinned because that release predates the install-test hook; later releases must install and relaunch from the previous channel version.
 - Removed obsolete Docktor release-transition machinery while retaining installed-user runtime compatibility and the existing stable and beta application identities.
 
