@@ -108,12 +108,6 @@ def validate_release_workflow() -> None:
     gate = workflow.split("  sparkle-update-gate:", 1)[1].split(
         "  publish-release:", 1
     )[0]
-    policy = workflow.split("  verify-release-policy:", 1)[1].split(
-        "  stage-draft-release:", 1
-    )[0]
-    draft = workflow.split("  stage-draft-release:", 1)[1].split(
-        "  generate-signed-appcasts:", 1
-    )[0]
     requirements = {
         "candidate certificate variable": (
             build,
@@ -155,14 +149,6 @@ def validate_release_workflow() -> None:
         raise ValueError("prepare job must expose the channel-aware native release matrix")
     if "secrets.APPLE_PRIOR_SIGNING_CERTIFICATE_SHA256" in workflow:
         raise ValueError("the prior signing certificate fingerprint must be a variable, not a secret")
-    if "needs:\n      - prepare\n    runs-on:" not in policy:
-        raise ValueError("immutable-release policy must depend only on prepared metadata")
-    if "stage-draft-release" in policy or "sparkle-update-gate" in policy:
-        raise ValueError("immutable-release policy must run before draft staging")
-    if "- verify-release-policy" not in draft:
-        raise ValueError("draft staging must require immutable-release policy verification")
-    if workflow.index("  verify-release-policy:") > workflow.index("  stage-draft-release:"):
-        raise ValueError("immutable-release policy must precede draft staging")
 
 
 def validate_origin() -> None:

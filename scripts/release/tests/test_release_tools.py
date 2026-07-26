@@ -86,13 +86,10 @@ class ReleaseContractTests(unittest.TestCase):
         ):
             self.assertNotIn(untrusted_trigger, release_triggers)
 
-    def test_release_source_and_immutable_policy_precede_publication(self):
+    def test_release_source_precedes_publication_without_an_admin_token(self):
         workflow = (RELEASE_DIR.parent.parent / ".github/workflows/release.yml").read_text(
             encoding="utf-8"
         )
-        policy = workflow.split("  verify-release-policy:", 1)[1].split(
-            "  stage-draft-release:", 1
-        )[0]
         draft = workflow.split("  stage-draft-release:", 1)[1].split(
             "  generate-signed-appcasts:", 1
         )[0]
@@ -106,22 +103,8 @@ class ReleaseContractTests(unittest.TestCase):
             "DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}", workflow
         )
         self.assertIn("git merge-base --is-ancestor", workflow)
-        self.assertIn("environment: release-policy", policy)
-        self.assertIn("permissions:\n      contents: read", policy)
-        self.assertIn("repos/$GH_REPO/immutable-releases", policy)
-        self.assertIn("secrets.IMMUTABLE_RELEASES_READ_TOKEN", policy)
-        self.assertEqual(policy.count("secrets."), 1)
-        self.assertEqual(workflow.count("secrets.IMMUTABLE_RELEASES_READ_TOKEN"), 1)
-        self.assertIn("needs:\n      - prepare\n    runs-on:", policy)
-        self.assertNotIn("stage-draft-release", policy)
-        self.assertNotIn("sparkle-update-gate", policy)
-        self.assertIn("- verify-release-policy", draft)
-        self.assertLess(
-            workflow.index("  verify-release-policy:"),
-            workflow.index("  stage-draft-release:"),
-        )
-        self.assertIn("- verify-release-policy", publish)
-        self.assertNotIn("IMMUTABLE_RELEASES_READ_TOKEN", publish)
+        self.assertIn("- build-macos", draft)
+        self.assertIn("- sparkle-update-gate", publish)
 
     def test_release_environments_expose_only_required_credentials(self):
         workflow = (RELEASE_DIR.parent.parent / ".github/workflows/release.yml").read_text(
@@ -259,7 +242,7 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn("validate-homebrew-casks", publication)
         self.assertIn("dockmint-homebrew-publication-", publication)
 
-    def test_update_channels_require_an_immutable_public_release(self):
+    def test_update_channels_require_the_public_release(self):
         workflow = (RELEASE_DIR.parent.parent / ".github/workflows/release.yml").read_text(
             encoding="utf-8"
         )
@@ -272,8 +255,7 @@ class ReleaseContractTests(unittest.TestCase):
         homebrew = workflow.split("  generate-homebrew-casks:", 1)[1].split(
             "  validate-homebrew-casks:", 1
         )[0]
-        self.assertIn("--jq .immutable", publish_release)
-        self.assertIn("Published release is not immutable", publish_release)
+        self.assertIn("gh release edit", publish_release)
         self.assertIn("- publish-release", appcast)
         self.assertIn("- publish-release", homebrew)
         self.assertIn("- prepare-sparkle-publication", homebrew)
