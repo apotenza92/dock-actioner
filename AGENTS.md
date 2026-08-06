@@ -32,7 +32,7 @@ swift tools/generate_icons.swift
 
 - `ci.yml`: manually invoked native ARM64 and Intel XCTest, unsigned stable/beta builds, decision-engine tests, and release-contract checks.
 - `release.yml`: native signed + notarized ARM64/Intel artefacts, strict package verification, GitHub Release publishing, and checksum-sealed Sparkle/Homebrew publication bundles.
-- Release workflows are tag-push only. They stage an exact draft asset set, verify signatures and native N-1 Sparkle update behaviour, then prepare exact appcast and Homebrew bundles for deliberate manual publication after the release gate. Workflows do not commit or push those repository updates.
+- Release workflows are tag-push only. They stage an exact draft asset set, verify signatures and native N-1 Sparkle update behaviour, then prepare the appcast bundle and the common attested Homebrew publication bundle. The source workflow dispatches the protected tap-owned publisher and waits for exact public-byte verification; it never writes the tap.
 - Beta tags run native updater gates for beta ARM64/x64 only. Stable tags run both stable and beta updater gates because a stable release can advance both feeds.
 - The shell Settings and Dock suites require a logged-in Aqua session plus Accessibility/Input Monitoring grants, so they remain a required local pre-tag gate in `scripts/release.sh`; hosted CI owns XCTest and credential-free release-contract checks.
 - `scripts/release/sparkle-update-bootstrap.json` is a source-pinned exception because the v0.4.1 packages predate the real update-test hook. Stable permits only v0.4.1 -> v0.4.2. Beta permits v0.4.1 -> v0.4.2-beta.1 when the prerelease ships first, or v0.4.1 -> v0.4.2 when the stable tag is the first Beta-feed advance. Those exact first transitions verify the candidate and its hook but cannot prove an install from v0.4.1; every later transition on that channel must install and relaunch from N-1. Never advance, broaden, or bypass this contract.
@@ -46,6 +46,7 @@ swift tools/generate_icons.swift
 - `release-signing`: protected P12 and App Store Connect P8 credentials used only by package jobs.
 - `sparkle-signing`: tag-restricted, with the Sparkle private key used only by appcast-signing jobs.
 - `stable-release` and `beta-release`: secret-free controls used only by the final public-release job. Draft staging, updater verification, and publication-bundle preparation must not consume their approval gate.
+- `homebrew-dispatch`: tag-restricted and contains only the Homebrew Dispatcher GitHub App private key. The App can dispatch Actions in `apotenza92/homebrew-tap` and has no Contents write permission.
 
 Environment secrets:
 
