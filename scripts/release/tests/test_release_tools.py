@@ -214,13 +214,24 @@ class ReleaseContractTests(unittest.TestCase):
             "  generate-homebrew-casks:", 1
         )[0]
         homebrew = workflow.split("  prepare-homebrew-publication:", 1)[1]
-        for publication in (appcast, homebrew):
-            self.assertIn("actions/upload-artifact", publication)
-            self.assertIn("SHA256SUMS", publication)
-            self.assertIn("Apply these exact", publication)
-            self.assertNotIn("git commit", publication)
-            self.assertNotIn("git push", publication)
-            self.assertNotIn("contents: write", publication)
+        draft = workflow.split("  stage-draft-release:", 1)[1].split(
+            "  generate-signed-appcasts:", 1
+        )[0]
+        self.assertIn("actions/upload-artifact", appcast)
+        self.assertIn("SHA256SUMS", appcast)
+        self.assertIn("Apply these exact", appcast)
+        self.assertNotIn("git commit", appcast)
+        self.assertNotIn("git push", appcast)
+        self.assertNotIn("contents: write", appcast)
+        self.assertIn("homebrew-publication.tar.gz", homebrew)
+        self.assertIn("actions/attest", draft)
+        self.assertIn("gh attestation verify", homebrew)
+        self.assertIn("actions/create-github-app-token", homebrew)
+        self.assertIn("publish-homebrew-v1", homebrew)
+        self.assertIn("gh run watch", homebrew)
+        self.assertNotIn("git commit", homebrew)
+        self.assertNotIn("git push", homebrew)
+        self.assertNotIn("HOMEBREW_TAP_DEPLOY_KEY", homebrew)
         self.assertNotIn("HOMEBREW_TAP_TOKEN", workflow)
         self.assertNotIn("secrets.HOMEBREW_TAP_TOKEN", workflow)
 

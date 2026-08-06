@@ -306,7 +306,9 @@ jobs:
       - prepare
       - build-macos
     permissions:
+      attestations: write
       contents: write
+      id-token: write
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout release tag
@@ -320,6 +322,17 @@ jobs:
           pattern: release-macos-*
           merge-multiple: true
           path: dist
+      - name: Build deterministic tap-owned Homebrew bundle from local candidate assets
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          python3 scripts/release/stage_homebrew_publication.py --tag "$TAG" --assets dist --output staged-homebrew
+          python3 scripts/create-homebrew-archive.py staged-homebrew/publication dist/homebrew-publication.tar.gz
+      - name: Attest the standard Homebrew publication bundle before publication
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
+        with:
+          subject-path: dist/homebrew-publication.tar.gz
       - name: Create exact draft asset set
         env:
           GH_TOKEN: ${{ github.token }}
@@ -342,7 +355,7 @@ jobs:
               printf '%s\n' "${prefix}-v${VERSION}-macos-${arch}.zip"
               printf '%s\n' "${prefix}-v${VERSION}-macos-${arch}.zip.sha256"
             done
-          done | sort > "$EXPECTED"
+          done | { cat; printf '%s\n' homebrew-publication.tar.gz; } | sort > "$EXPECTED"
           find dist -maxdepth 1 -type f -exec basename {} \; | sort > "$RUNNER_TEMP/local-assets.txt"
           diff -u "$EXPECTED" "$RUNNER_TEMP/local-assets.txt"
 
@@ -691,38 +704,103 @@ jobs:
       - generate-homebrew-casks
       - validate-homebrew-casks
     permissions:
-      contents: read
+      contents: write
+      id-token: write
+      attestations: write
     runs-on: ubuntu-24.04
     steps:
+      - name: Checkout reviewed release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          persist-credentials: false
       - name: Download exact casks validated on both native runners
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: reviewed-homebrew-casks
           path: publication/Casks
-      - name: Seal Homebrew publication bundle
+      - name: Seal standard Homebrew publication bundle
         env:
           TAG: ${{ needs.prepare.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           casks="$(find publication/Casks -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort | paste -sd ' ' -)"
           [[ "$casks" == 'dockmint.rb dockmint@beta.rb' ]]
+          gh release view "$TAG" --json assets > release-assets.json
+          channel=stable
+          [[ "$TAG" == *-beta.* ]] && channel=beta
+          python3 scripts/release/build_homebrew_publication.py \
+            --channel "$channel" --tag "$TAG" \
+            --casks publication/Casks --release-assets release-assets.json \
+            --output publication
           (
             cd publication
-            find Casks -type f -name '*.rb' -print0 |
+            find manifest.json Casks -type f -print0 |
               LC_ALL=C sort -z |
               xargs -0 sha256sum > SHA256SUMS
+            sha256sum --check --strict SHA256SUMS
+            tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
+              -czf ../homebrew-publication.tar.gz manifest.json SHA256SUMS Casks
           )
-          printf '%s\n' \
-            "Dockmint Homebrew publication bundle" \
-            "release-tag=${TAG}" \
-            "release-commit=${{ github.sha }}" \
-            "destination=apotenza92/homebrew-tap:Casks/" \
-            "Apply these exact natively validated bytes manually after the release approval gate." \
-            > publication/PUBLICATION.txt
+
+      - name: Verify exact pre-published attested bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir existing-bundle
+          gh release download "$TAG" --pattern homebrew-publication.tar.gz --dir existing-bundle
+          cmp homebrew-publication.tar.gz existing-bundle/homebrew-publication.tar.gz
+          gh attestation verify existing-bundle/homebrew-publication.tar.gz --repo "$GITHUB_REPOSITORY"
       - name: Upload Homebrew publication bundle
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: dockmint-homebrew-publication-${{ needs.prepare.outputs.tag }}
-          path: publication
+          path: |
+            publication
+            homebrew-publication.tar.gz
           if-no-files-found: error
           retention-days: 14
+
+  dispatch-homebrew-publication:
+    needs:
+      - prepare
+      - prepare-homebrew-publication
+    permissions:
+      contents: read
+    environment: homebrew-dispatch
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Mint dispatch-only tap token
+        id: dispatcher
+        uses: actions/create-github-app-token@67018539274d69449ef7c02e8e71183d1719ab42 # v2
+        with:
+          app-id: ${{ vars.HOMEBREW_DISPATCHER_APP_ID }}
+          private-key: ${{ secrets.HOMEBREW_DISPATCHER_PRIVATE_KEY }}
+          owner: apotenza92
+          repositories: homebrew-tap
+      - name: Dispatch trusted publication and wait for exact correlation
+        env:
+          GH_TOKEN: ${{ steps.dispatcher.outputs.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          TAP_REPOSITORY: apotenza92/homebrew-tap
+        run: |
+          set -euo pipefail
+          correlation="${GITHUB_REPOSITORY}:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${TAG}"
+          started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          jq -n --arg product dockmint --arg tag "$TAG" --arg release_commit "$GITHUB_SHA" \
+            --arg source_run_id "$GITHUB_RUN_ID" --arg source_run_attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg correlation_id "$correlation" \
+            '{event_type:"publish-homebrew-v1",client_payload:{product:$product,tag:$tag,release_commit:$release_commit,source_run_id:$source_run_id,source_run_attempt:$source_run_attempt,correlation_id:$correlation_id}}' |
+            gh api --method POST "repos/$TAP_REPOSITORY/dispatches" --input -
+          run_id=''
+          for _ in {1..30}; do
+            run_id="$(gh api "repos/$TAP_REPOSITORY/actions/workflows/publish-homebrew.yml/runs?event=repository_dispatch&per_page=30" \
+              --jq ".workflow_runs[] | select(.display_title == \"$correlation\" and .created_at >= \"$started\") | .id" | head -n1)"
+            [[ -n "$run_id" ]] && break
+            sleep 2
+          done
+          [[ -n "$run_id" ]]
+          gh run watch "$run_id" --repo "$TAP_REPOSITORY" --exit-status
