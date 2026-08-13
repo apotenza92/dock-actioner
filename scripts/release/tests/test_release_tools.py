@@ -97,7 +97,7 @@ class ReleaseContractTests(unittest.TestCase):
             "  prepare-sparkle-publication:", 1
         )[0]
 
-        self.assertIn("fetch-depth: 0", workflow.split("  release-gate:", 1)[0])
+        self.assertIn("fetch-depth: 0", workflow.split("  build-macos:", 1)[0])
         self.assertIn("Prove tag commit belongs to the approved release source", workflow)
         self.assertIn(
             "DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}", workflow
