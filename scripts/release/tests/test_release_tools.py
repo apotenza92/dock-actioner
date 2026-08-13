@@ -97,7 +97,7 @@ class ReleaseContractTests(unittest.TestCase):
             "  prepare-sparkle-publication:", 1
         )[0]
 
-        self.assertIn("fetch-depth: 0", workflow.split("  release-gate:", 1)[0])
+        self.assertIn("fetch-depth: 0", workflow.split("  build-macos:", 1)[0])
         self.assertIn("Prove tag commit belongs to the approved release source", workflow)
         self.assertIn(
             "DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}", workflow
@@ -228,7 +228,7 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn("gh attestation verify", homebrew)
         self.assertIn("actions/create-github-app-token", homebrew)
         self.assertIn("publish-homebrew-v1", homebrew)
-        self.assertIn("gh run watch", homebrew)
+        self.assertNotIn("gh run watch", homebrew)
         self.assertNotIn("git commit", homebrew)
         self.assertNotIn("git push", homebrew)
         self.assertNotIn("HOMEBREW_TAP_DEPLOY_KEY", homebrew)
