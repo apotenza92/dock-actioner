@@ -228,7 +228,7 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn("gh attestation verify", homebrew)
         self.assertIn("actions/create-github-app-token", homebrew)
         self.assertIn("publish-homebrew-v1", homebrew)
-        self.assertIn("gh run watch", homebrew)
+        self.assertNotIn("gh run watch", homebrew)
         self.assertNotIn("git commit", homebrew)
         self.assertNotIn("git push", homebrew)
         self.assertNotIn("HOMEBREW_TAP_DEPLOY_KEY", homebrew)
