@@ -5,17 +5,22 @@
     <description>Dockmint update feed (stable channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.4.1</title>
-      <link>https://github.com/apotenza92/dockmint/releases/tag/v0.4.1</link>
-      <sparkle:version>400190000</sparkle:version>
-      <sparkle:shortVersionString>0.4.1</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <title>Version 0.4.2</title>
+      <link>https://github.com/apotenza92/dockmint/releases/tag/v0.4.2</link>
+      <sparkle:version>400290000</sparkle:version>
+      <sparkle:shortVersionString>0.4.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/dockmint/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Made App Exposé and window-count diagnostic logging quiet by default in shipped builds, with detailed diagnostics emitted only when `Save diagnostic logs` or the debug log override is enabled.]]></description>
-      <pubDate>Fri, 05 Jun 2026 07:33:15 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/dockmint/releases/download/v0.4.1/Dockmint-v0.4.1-macos-x64.zip"
-                 sparkle:edSignature="lSm3V/OgBO3+luBxvWZyaE0Rl5cUA5FN8qMV3VmXmlTJVDvZ7eRpaWPSwM2ECrdKcJCtmetF/2kDfc9bQmOTCg=="
-                 length="2998616"
+      <description sparkle:format="plain-text"><![CDATA[- Restored native Dock icon dragging while Dockmint is running by replaying consumed mouse-down events when a click becomes a drag.
+- Made onboarding and completion windows fit their rendered content vertically while remaining width-capped and screen-bounded, and disabled unavailable update controls in development builds.
+- Improved Dock interaction performance with single-pass target classification, latched continuous-scroll handling, lazy diagnostic work, and deferred folder-application discovery.
+- Modernized Settings with a compact sidebar, fixed no-scroll pane sizing, modern macOS 26 window chrome, and matching App Actions and Folder Actions matrices with system-default Finder behavior.
+- Expanded decision, defaults, window-sizing, and native GUI regression coverage for the updated behavior.
+- Hardened the hosted release pipeline for native Apple Silicon and Intel builds with strict signing, notarisation, Sparkle update, artifact-provenance, and Homebrew publication checks.]]></description>
+      <pubDate>Wed, 02 Sep 2026 09:55:11 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/dockmint/releases/download/v0.4.2/Dockmint-v0.4.2-macos-x64.zip"
+                 sparkle:edSignature="ejtsc2CXv2HVKNeoSnKnSHy92cv+pF5qfU2rabPCBKYRonGPYSmMDb4c2L2DL7MfwvBlpLFY1EG4pjsTGNbrBA=="
+                 length="3053486"
                  type="application/octet-stream" />
     </item>
   </channel>
