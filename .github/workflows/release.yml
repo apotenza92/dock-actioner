@@ -700,7 +700,7 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: reviewed-homebrew-casks
-          path: publication/Casks
+          path: reviewed-casks
       - name: Seal standard Homebrew publication bundle
         env:
           TAG: ${{ needs.prepare.outputs.tag }}
@@ -714,7 +714,7 @@ jobs:
           [[ "$TAG" == *-beta.* ]] && channel=beta
           python3 scripts/release/build_homebrew_publication.py \
             --channel "$channel" --tag "$TAG" \
-            --casks publication/Casks --release-assets release-assets.json \
+            --casks reviewed-casks --release-assets release-assets.json \
             --output publication
           (
             cd publication

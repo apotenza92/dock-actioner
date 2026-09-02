@@ -215,6 +215,11 @@ class ReleaseContractTests(unittest.TestCase):
             "  prepare-homebrew-publication:", 1
         )[0]
         self.assertIn("HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}", homebrew_validation)
+        homebrew_publication = workflow.split("  prepare-homebrew-publication:", 1)[1].split(
+            "  dispatch-homebrew-publication:", 1
+        )[0]
+        self.assertIn("path: reviewed-casks", homebrew_publication)
+        self.assertIn("--casks reviewed-casks", homebrew_publication)
 
     def test_draft_release_metadata_allows_an_unpublished_timestamp(self):
         release = sparkle.parse_release(
