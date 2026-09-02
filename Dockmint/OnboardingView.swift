@@ -262,7 +262,7 @@ struct OnboardingView: View {
     private func onboardingSection<Content: View>(title: String,
                                                   description: String,
                                                   @ViewBuilder content: () -> Content) -> some View {
-        let section = VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
             Text(title)
                 .font(.title3.weight(.semibold))
 
@@ -276,15 +276,6 @@ struct OnboardingView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-
-        if #available(macOS 26.0, *) {
-            section.glassEffect(.regular, in: .rect(cornerRadius: 12))
-        } else {
-            section.background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor))
-            )
-        }
     }
 }
 
