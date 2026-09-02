@@ -227,6 +227,36 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertEqual(release.published_at, "")
         self.assertEqual(sparkle.to_rfc2822(release.published_at)[-5:], "+0000")
 
+    def test_draft_assets_use_durable_tag_urls_in_candidate_appcasts(self):
+        release = sparkle.parse_release(
+            {
+                "tag_name": "v0.4.2",
+                "html_url": "https://example.invalid/untagged-draft",
+                "draft": True,
+                "prerelease": False,
+                "published_at": None,
+                "assets": [
+                    {
+                        "name": "Dockmint-v0.4.2-macos-arm64.zip",
+                        "size": 42,
+                        "url": "https://api.example.invalid/assets/1",
+                        "browser_download_url": "https://example.invalid/untagged/asset.zip",
+                    }
+                ],
+            }
+        )
+        self.assertIsNotNone(release)
+        canonical = sparkle.release_with_canonical_urls(release, "apotenza92/dockmint")
+        self.assertEqual(
+            canonical.html_url,
+            "https://github.com/apotenza92/dockmint/releases/tag/v0.4.2",
+        )
+        self.assertEqual(
+            canonical.assets[0].download_url,
+            "https://github.com/apotenza92/dockmint/releases/download/v0.4.2/Dockmint-v0.4.2-macos-arm64.zip",
+        )
+        self.assertEqual(canonical.assets[0].api_url, release.assets[0].api_url)
+
     def test_publication_jobs_never_commit_or_push(self):
         workflow = (RELEASE_DIR.parent.parent / ".github/workflows/release.yml").read_text(
             encoding="utf-8"

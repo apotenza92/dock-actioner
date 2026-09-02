@@ -122,6 +122,24 @@ def parse_release(item: object) -> Release | None:
     )
 
 
+def release_with_canonical_urls(release: Release, repo: str) -> Release:
+    """Replace GitHub's ephemeral draft URLs with their published tag URLs."""
+    return dataclasses.replace(
+        release,
+        html_url=f"https://github.com/{repo}/releases/tag/{release.tag_name}",
+        assets=tuple(
+            dataclasses.replace(
+                asset,
+                download_url=(
+                    f"https://github.com/{repo}/releases/download/"
+                    f"{release.tag_name}/{asset.name}"
+                ),
+            )
+            for asset in release.assets
+        ),
+    )
+
+
 def fetch_releases(repo: str, github_token: str | None) -> list[Release]:
     headers = {
         "Accept": "application/vnd.github+json",
@@ -520,6 +538,10 @@ def main() -> int:
             or not candidate_release.draft
         ):
             raise RuntimeError("Candidate release metadata does not match the requested draft")
+        # GitHub gives draft assets an ephemeral ``untagged-*`` browser URL. The
+        # reviewed bytes are published under the real tag later in this workflow,
+        # so appcasts must contain their durable post-publication URLs.
+        candidate_release = release_with_canonical_urls(candidate_release, args.repo)
         fetched_releases = [
             release
             for release in fetched_releases
