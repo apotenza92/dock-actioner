@@ -608,6 +608,8 @@ jobs:
     needs:
       - prepare
       - generate-homebrew-casks
+    env:
+      HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
     strategy:
       fail-fast: false
       matrix:
