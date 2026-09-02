@@ -205,6 +205,9 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn('if [[ "$PRERELEASE" != "true" ]]', draft)
         self.assertIn("prefixes=(Dockmint \"${prefixes[@]}\")", draft)
         self.assertIn("--draft --prerelease", draft)
+        self.assertNotIn("releases/tags/$TAG", workflow)
+        self.assertIn("--json databaseId --jq .databaseId", draft)
+        self.assertIn("--json isDraft --jq .isDraft", draft)
 
     def test_publication_jobs_never_commit_or_push(self):
         workflow = (RELEASE_DIR.parent.parent / ".github/workflows/release.yml").read_text(

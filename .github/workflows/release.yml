@@ -321,7 +321,7 @@ jobs:
           diff -u "$EXPECTED" "$RUNNER_TEMP/local-assets.txt"
 
           if gh release view "$TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
-            test "$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .draft)" = true || {
+            test "$(gh release view "$TAG" --repo "$GH_REPO" --json isDraft --jq .isDraft)" = true || {
               echo "::error::Refusing to mutate an already-published release"
               exit 1
             }
@@ -333,7 +333,9 @@ jobs:
             fi
           fi
 
-          gh api "repos/$GH_REPO/releases/tags/$TAG" --paginate --jq '.assets[].name' | sort > "$RUNNER_TEMP/remote-before.txt"
+          RELEASE_ID="$(gh release view "$TAG" --repo "$GH_REPO" --json databaseId --jq .databaseId)"
+          test -n "$RELEASE_ID"
+          gh api "repos/$GH_REPO/releases/$RELEASE_ID" --jq '.assets[].name' | sort > "$RUNNER_TEMP/remote-before.txt"
           if comm -13 "$EXPECTED" "$RUNNER_TEMP/remote-before.txt" | grep -q .; then
             echo "::error::Draft contains unexpected assets"
             comm -13 "$EXPECTED" "$RUNNER_TEMP/remote-before.txt"
@@ -351,7 +353,7 @@ jobs:
             fi
           done < "$EXPECTED"
 
-          gh api "repos/$GH_REPO/releases/tags/$TAG" --paginate --jq '.assets[].name' | sort > "$RUNNER_TEMP/remote-after.txt"
+          gh api "repos/$GH_REPO/releases/$RELEASE_ID" --jq '.assets[].name' | sort > "$RUNNER_TEMP/remote-after.txt"
           diff -u "$EXPECTED" "$RUNNER_TEMP/remote-after.txt"
           mkdir "$RUNNER_TEMP/redownloaded"
           gh release download "$TAG" --repo "$GH_REPO" --dir "$RUNNER_TEMP/redownloaded"
@@ -508,7 +510,7 @@ jobs:
           PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
         run: |
           set -euo pipefail
-          test "$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .draft)" = true
+          test "$(gh release view "$TAG" --repo "$GH_REPO" --json isDraft --jq .isDraft)" = true
           gh release edit "$TAG" --repo "$GH_REPO" \
             --draft=false --prerelease="$PRERELEASE" \
             --latest="$([[ "$PRERELEASE" == true ]] && echo false || echo true)"
