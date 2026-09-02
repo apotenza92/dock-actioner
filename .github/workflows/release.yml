@@ -361,6 +361,15 @@ jobs:
           for checksum in "$RUNNER_TEMP"/redownloaded/*.sha256; do
             (cd "$RUNNER_TEMP/redownloaded" && shasum -a 256 -c "$(basename "$checksum")")
           done
+          mkdir review-input
+          cp dist/*.zip review-input/
+          gh api "repos/$GH_REPO/releases/$RELEASE_ID" > review-input/candidate-release.json
+      - name: Upload reviewed draft inputs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: reviewed-draft-inputs
+          path: review-input
+          if-no-files-found: error
 
   generate-signed-appcasts:
     needs:
@@ -378,10 +387,11 @@ jobs:
           persist-credentials: false
       - name: Install pinned public dependencies
         run: python3 -m pip install --quiet 'cryptography==45.0.7'
-      - name: Download exact draft assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release download "${{ needs.prepare.outputs.tag }}" --repo "${{ github.repository }}" --pattern '*.zip' --dir candidate-assets
+      - name: Download reviewed draft inputs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: reviewed-draft-inputs
+          path: candidate-assets
       - name: Generate signed candidate appcasts
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -390,7 +400,9 @@ jobs:
           python3 scripts/release/update_sparkle_appcasts.py \
             --repo "${{ github.repository }}" --output-dir generated-appcasts \
             --github-token "$GITHUB_TOKEN" --require-signatures \
-            --candidate-tag "${{ needs.prepare.outputs.tag }}"
+            --candidate-tag "${{ needs.prepare.outputs.tag }}" \
+            --candidate-release-json candidate-assets/candidate-release.json \
+            --asset-cache-dir candidate-assets
       - name: Download any N-1 assets retained by stable feeds
         run: |
           python3 - <<'PY'
@@ -445,6 +457,11 @@ jobs:
         with:
           name: signed-appcasts
           path: signed-appcasts
+      - name: Download reviewed draft inputs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: reviewed-draft-inputs
+          path: candidate-assets
       - name: Download candidate and current N-1 package
         env:
           GH_TOKEN: ${{ github.token }}
@@ -454,7 +471,7 @@ jobs:
           set -euo pipefail
           mkdir packages
           candidate="${{ matrix.package_prefix }}-v${VERSION}-macos-${{ matrix.arch }}.zip"
-          gh release download "$TAG" --repo "${{ github.repository }}" --pattern "$candidate" --dir packages
+          cp "candidate-assets/$candidate" packages/
           current_feed="https://raw.githubusercontent.com/${{ github.repository }}/main/appcasts/${{ matrix.channel }}-${{ matrix.arch }}.xml"
           previous_url="$(python3 - "$current_feed" <<'PY'
           import sys, urllib.request, xml.etree.ElementTree as ET

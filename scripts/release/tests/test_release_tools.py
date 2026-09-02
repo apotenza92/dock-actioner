@@ -208,6 +208,24 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertNotIn("releases/tags/$TAG", workflow)
         self.assertIn("--json databaseId --jq .databaseId", draft)
         self.assertIn("--json isDraft --jq .isDraft", draft)
+        self.assertIn("name: reviewed-draft-inputs", draft)
+        self.assertIn("--candidate-release-json candidate-assets/candidate-release.json", workflow)
+        self.assertIn('cp "candidate-assets/$candidate" packages/', workflow)
+
+    def test_draft_release_metadata_allows_an_unpublished_timestamp(self):
+        release = sparkle.parse_release(
+            {
+                "tag_name": "v0.4.2",
+                "html_url": "https://example.invalid/untagged-draft",
+                "draft": True,
+                "prerelease": False,
+                "published_at": None,
+                "assets": [],
+            }
+        )
+        self.assertIsNotNone(release)
+        self.assertEqual(release.published_at, "")
+        self.assertEqual(sparkle.to_rfc2822(release.published_at)[-5:], "+0000")
 
     def test_publication_jobs_never_commit_or_push(self):
         workflow = (RELEASE_DIR.parent.parent / ".github/workflows/release.yml").read_text(

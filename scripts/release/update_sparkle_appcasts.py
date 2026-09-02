@@ -16,6 +16,7 @@ import datetime as dt
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -89,6 +90,38 @@ def extract_notes(changelog_path: Path, tag: str) -> str:
     return section
 
 
+def parse_release(item: object) -> Release | None:
+    if not isinstance(item, dict):
+        raise RuntimeError("Unexpected GitHub release entry")
+    parsed = parse_tag(str(item.get("tag_name", "")))
+    if parsed is None:
+        return None
+    prerelease_flag = bool(item.get("prerelease", False))
+    if prerelease_flag != parsed.is_prerelease:
+        raise RuntimeError(
+            f"Release {item.get('tag_name')} prerelease flag does not match its tag"
+        )
+    assets = tuple(
+        ReleaseAsset(
+            name=str(asset.get("name", "")),
+            size=int(asset.get("size", 0)),
+            api_url=str(asset.get("url", "")),
+            download_url=str(asset.get("browser_download_url", "")),
+        )
+        for asset in item.get("assets", [])
+        if isinstance(asset, dict)
+    )
+    return Release(
+        tag_name=str(item.get("tag_name", "")),
+        html_url=str(item.get("html_url") or ""),
+        draft=bool(item.get("draft", False)),
+        prerelease_flag=prerelease_flag,
+        published_at=str(item.get("published_at") or ""),
+        assets=assets,
+        parsed=parsed,
+    )
+
+
 def fetch_releases(repo: str, github_token: str | None) -> list[Release]:
     headers = {
         "Accept": "application/vnd.github+json",
@@ -110,35 +143,9 @@ def fetch_releases(repo: str, github_token: str | None) -> list[Release]:
             raise RuntimeError(f"Unexpected GitHub releases response for {repo}")
 
         for item in payload:
-            parsed = parse_tag(item.get("tag_name", ""))
-            if parsed is None:
-                continue
-            prerelease_flag = bool(item.get("prerelease", False))
-            if prerelease_flag != parsed.is_prerelease:
-                raise RuntimeError(
-                    f"Release {item.get('tag_name')} prerelease flag does not match its tag"
-                )
-
-            assets = tuple(
-                ReleaseAsset(
-                    name=str(asset.get("name", "")),
-                    size=int(asset.get("size", 0)),
-                    api_url=str(asset.get("url", "")),
-                    download_url=str(asset.get("browser_download_url", "")),
-                )
-                for asset in item.get("assets", [])
-            )
-            releases.append(
-                Release(
-                    tag_name=str(item.get("tag_name", "")),
-                    html_url=str(item.get("html_url", "")),
-                    draft=bool(item.get("draft", False)),
-                    prerelease_flag=prerelease_flag,
-                    published_at=str(item.get("published_at", "")),
-                    assets=assets,
-                    parsed=parsed,
-                )
-            )
+            release = parse_release(item)
+            if release is not None:
+                releases.append(release)
         if len(payload) < 100:
             break
     else:
@@ -444,6 +451,18 @@ def main() -> int:
         help="Include this exact draft release while generating pre-publication appcasts",
     )
     parser.add_argument(
+        "--candidate-release-json",
+        type=Path,
+        default=None,
+        help="Trusted draft release metadata passed between workflow jobs",
+    )
+    parser.add_argument(
+        "--asset-cache-dir",
+        type=Path,
+        default=None,
+        help="Directory containing already-reviewed candidate assets",
+    )
+    parser.add_argument(
         "--sparkle-sign-update-bin",
         default=None,
         help="Optional path to Sparkle's sign_update tool for signing appcasts using Sparkle-native key handling",
@@ -490,9 +509,26 @@ def main() -> int:
             "Missing Sparkle private key. Set SPARKLE_PRIVATE_ED_KEY or --sparkle-private-key."
         )
 
+    fetched_releases = fetch_releases(args.repo, github_token)
+    if args.candidate_release_json is not None:
+        candidate_release = parse_release(
+            json.loads(args.candidate_release_json.read_text(encoding="utf-8"))
+        )
+        if (
+            candidate_release is None
+            or candidate_release.tag_name != args.candidate_tag
+            or not candidate_release.draft
+        ):
+            raise RuntimeError("Candidate release metadata does not match the requested draft")
+        fetched_releases = [
+            release
+            for release in fetched_releases
+            if release.tag_name != candidate_release.tag_name
+        ] + [candidate_release]
+
     releases = [
         release
-        for release in fetch_releases(args.repo, github_token)
+        for release in fetched_releases
         if not release.draft or release.tag_name == args.candidate_tag
     ]
     if args.candidate_tag is not None and not any(
@@ -548,6 +584,9 @@ def main() -> int:
             prefix="dockmint-sparkle-sign-"
         ) as temp_dir:
             cache_dir = Path(temp_dir)
+            if args.asset_cache_dir is not None:
+                for cached_asset in args.asset_cache_dir.glob("*.zip"):
+                    shutil.copy2(cached_asset, cache_dir / cached_asset.name)
             unique_assets = {
                 stable_arm_asset.name: stable_arm_asset,
                 stable_x64_asset.name: stable_x64_asset,
@@ -563,6 +602,9 @@ def main() -> int:
             prefix="dockmint-sparkle-sign-"
         ) as temp_dir:
             cache_dir = Path(temp_dir)
+            if args.asset_cache_dir is not None:
+                for cached_asset in args.asset_cache_dir.glob("*.zip"):
+                    shutil.copy2(cached_asset, cache_dir / cached_asset.name)
             unique_assets = {
                 stable_arm_asset.name: stable_arm_asset,
                 stable_x64_asset.name: stable_x64_asset,
