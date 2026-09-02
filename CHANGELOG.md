@@ -6,6 +6,15 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
+## [v0.4.2]
+
+- Restored native Dock icon dragging while Dockmint is running by replaying consumed mouse-down events when a click becomes a drag.
+- Made onboarding and completion windows fit their rendered content vertically while remaining width-capped and screen-bounded, and disabled unavailable update controls in development builds.
+- Improved Dock interaction performance with single-pass target classification, latched continuous-scroll handling, lazy diagnostic work, and deferred folder-application discovery.
+- Modernized Settings with a compact sidebar, fixed no-scroll pane sizing, modern macOS 26 window chrome, and matching App Actions and Folder Actions matrices with system-default Finder behavior.
+- Expanded decision, defaults, window-sizing, and native GUI regression coverage for the updated behavior.
+- Hardened the hosted release pipeline for native Apple Silicon and Intel builds with strict signing, notarisation, Sparkle update, artifact-provenance, and Homebrew publication checks.
+
 ## [v0.4.2-beta.1]
 
 - Hardened the hosted release pipeline for native Apple Silicon and Intel builds with required XCTest, strict Developer ID and nested Sparkle verification, notarisation, stapling, Gatekeeper assessment, checksums, and artifact provenance.

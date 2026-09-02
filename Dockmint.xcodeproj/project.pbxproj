@@ -16,6 +16,8 @@
 		C374E4A29F47ED49B09150A8 /* DockmintTests/DockDecisionEngineXCTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93451BA79642D3FDADF60039 /* DockmintTests/DockDecisionEngineXCTest.swift */; };
 		C81A4BB45E8C4C31A4D94011 /* DockmintTests/DockFolderActionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C81A4BB35E8C4C31A4D94011 /* DockmintTests/DockFolderActionTests.swift */; };
 		D1E2F3A4B5C60718293A4B5C /* Dockmint/DockDecisionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E2D3C4B5A6978877665544 /* Dockmint/DockDecisionEngine.swift */; };
+		A11CE0000000000000000001 /* Dockmint/SettingsWindowSizing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE0000000000000000003 /* Dockmint/SettingsWindowSizing.swift */; };
+		A11CE0000000000000000002 /* DockmintTests/SettingsWindowSizingXCTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE0000000000000000004 /* DockmintTests/SettingsWindowSizingXCTest.swift */; };
 		D9A2B3C4D5E6F708192A3B4C /* Dockmint/AppIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9A2B3C4D5E6F708192A3B4D /* Dockmint/AppIdentity.swift */; };
 		D9A2B3C4D5E6F708192A3B4E /* Dockmint/Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9A2B3C4D5E6F708192A3B4F /* Dockmint/Preferences.swift */; };
 		D9A2B3C4D5E6F708192A3B50 /* Dockmint/SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9A2B3C4D5E6F708192A3B51 /* Dockmint/SettingsStore.swift */; };
@@ -53,6 +55,8 @@
 		D7A1C2234F1B4D4A91C4A004 /* Dockmint/Logger.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Dockmint/Logger.swift; sourceTree = "<group>"; };
 		E1C3D7B1DBCB2A02A51BAF57 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
 		F1E2D3C4B5A6978877665544 /* Dockmint/DockDecisionEngine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Dockmint/DockDecisionEngine.swift; sourceTree = "<group>"; };
+		A11CE0000000000000000003 /* Dockmint/SettingsWindowSizing.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Dockmint/SettingsWindowSizing.swift; sourceTree = "<group>"; };
+		A11CE0000000000000000004 /* DockmintTests/SettingsWindowSizingXCTest.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DockmintTests/SettingsWindowSizingXCTest.swift; sourceTree = "<group>"; };
 		FA12B1922EFF98EC00DB8333 /* Dockmint.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Dockmint.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -102,6 +106,7 @@
 		408FA64AE679444C7627B0C1 /* DockmintTests */ = {
 			isa = PBXGroup;
 			children = (
+				A11CE0000000000000000004 /* DockmintTests/SettingsWindowSizingXCTest.swift */,
 				93451BA79642D3FDADF60039 /* DockmintTests/DockDecisionEngineXCTest.swift */,
 				A4D9F3C41E2B7A6C8D5E0010 /* DockmintTests/PreferencesDefaultsXCTest.swift */,
 				B1C2D3E4F5A60718293A4B59 /* DockmintTests/AppIdentityXCTest.swift */,
@@ -116,6 +121,7 @@
 				D7A1C2234F1B4D4A91C4A004 /* Dockmint/Logger.swift */,
 				B1C2D3E4F5A60718293A4B5F /* Dockmint/LaunchBehavior.swift */,
 				F1E2D3C4B5A6978877665544 /* Dockmint/DockDecisionEngine.swift */,
+				A11CE0000000000000000003 /* Dockmint/SettingsWindowSizing.swift */,
 			);
 			name = DockmintTests;
 			sourceTree = "<group>";
@@ -273,6 +279,8 @@
 				D7A1C2234F1B4D4A91C4A003 /* Dockmint/Logger.swift in Sources */,
 				B1C2D3E4F5A60718293A4B60 /* Dockmint/LaunchBehavior.swift in Sources */,
 				D1E2F3A4B5C60718293A4B5C /* Dockmint/DockDecisionEngine.swift in Sources */,
+				A11CE0000000000000000001 /* Dockmint/SettingsWindowSizing.swift in Sources */,
+				A11CE0000000000000000002 /* DockmintTests/SettingsWindowSizingXCTest.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

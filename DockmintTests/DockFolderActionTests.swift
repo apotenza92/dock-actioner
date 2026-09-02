@@ -47,6 +47,29 @@ final class DockFolderActionTests: XCTestCase {
         XCTAssertEqual(defaults.string(forKey: "folderClickAction"), Preferences.defaultFolderClickAction.storageValue)
     }
 
+    func testStoredFolderOptionsLoadUsingSystemDefaults() {
+        let defaults = isolatedDefaults()
+        let configuredFinder = DockFolderAction(
+            openInApplicationIdentifier: DockFolderOpenApplicationCatalog.finderBundleIdentifier,
+            view: .list,
+            sortBy: .name,
+            groupBy: .kind
+        )
+        defaults.set(configuredFinder.storageValue, forKey: "folderClickAction")
+
+        let preferences = Preferences(testingUserDefaults: defaults)
+
+        XCTAssertEqual(
+            preferences.folderClickAction,
+            DockFolderAction(
+                openInApplicationIdentifier: DockFolderOpenApplicationCatalog.finderBundleIdentifier,
+                view: .automatic,
+                sortBy: .none,
+                groupBy: .none
+            )
+        )
+    }
+
     func testDeprecatedBringAllToFrontSettingsMigrateToSingleClickDefaults() {
         let defaults = isolatedDefaults()
         defaults.set(DockAction.bringAllToFront.rawValue, forKey: "clickAction")

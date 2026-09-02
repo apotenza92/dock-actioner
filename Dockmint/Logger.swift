@@ -46,9 +46,9 @@ enum Logger {
         }
     }
 
-    static func debug(_ message: String) {
+    static func debug(_ message: @autoclosure () -> String) {
         guard shouldWritePersistentFileLogs else { return }
-        let line = "Dockmint: \(message)"
+        let line = "Dockmint: \(message())"
         oslog.debug("\(line, privacy: .public)")
         queue.async {
             if let data = (line + "\n").data(using: .utf8) {

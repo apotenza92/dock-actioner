@@ -1,8 +1,17 @@
 import SwiftUI
 
+private struct OnboardingContentHeightPreferenceKey: SwiftUI.PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 struct OnboardingView: View {
     @ObservedObject var coordinator: DockExposeCoordinator
     @ObservedObject var preferences: Preferences
+    var onContentHeightChange: (CGFloat) -> Void = { _ in }
 
     @State private var showPermissionsRequiredPopover = false
     @State private var showMenuBarHint = false
@@ -11,6 +20,10 @@ struct OnboardingView: View {
 
     private var loginItemAvailable: Bool {
         AppIdentity.supportsLoginItem
+    }
+
+    private var updatesAvailable: Bool {
+        AppIdentity.supportsUpdates
     }
 
     private var permissionsReady: Bool {
@@ -31,19 +44,18 @@ struct OnboardingView: View {
     var body: some View {
         Group {
             if showMenuBarHint {
-                completionView
+                measuredContent(completionView)
             } else {
-                VStack(alignment: .leading, spacing: 16) {
-                    header
-                    permissionsSection
-                    loginItemSection
-                    detectedMouseScrollToolSection
-                    updatesSection
-                    footerActions
+                ScrollView {
+                    measuredContent(setupView)
                 }
-                .padding(20)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .scrollIndicators(.automatic)
+                .scrollBounceBehavior(.basedOnSize)
             }
+        }
+        .onPreferenceChange(OnboardingContentHeightPreferenceKey.self) { height in
+            guard height > 0 else { return }
+            onContentHeightChange(height)
         }
         .onAppear {
             coordinator.refreshPermissionsAfterExternalChange()
@@ -53,6 +65,34 @@ struct OnboardingView: View {
                 showPermissionsRequiredPopover = false
             }
         }
+    }
+
+    private var setupView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            header
+            permissionsSection
+            if loginItemAvailable || !AppIdentity.isDevelopmentIdentity {
+                loginItemSection
+            }
+            detectedMouseScrollToolSection
+            updatesSection
+            footerActions
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func measuredContent<Content: View>(_ content: Content) -> some View {
+        content
+            .fixedSize(horizontal: false, vertical: true)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: OnboardingContentHeightPreferenceKey.self,
+                        value: proxy.size.height
+                    )
+                }
+            )
     }
 
     private var header: some View {
@@ -72,7 +112,6 @@ struct OnboardingView: View {
         ) {
             SharedPermissionsSection(
                 coordinator: coordinator,
-                buttonTitle: "Open Settings",
                 footerText: permissionsFooterText
             )
         }
@@ -129,8 +168,14 @@ struct OnboardingView: View {
             description: ""
         ) {
             Toggle("Enable background update checks", isOn: $preferences.backgroundUpdateChecksEnabled)
+                .disabled(!updatesAvailable)
 
-            if preferences.backgroundUpdateChecksEnabled {
+            if !updatesAvailable && !AppIdentity.isDevelopmentIdentity {
+                Text("Background update checks are unavailable in this build.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if updatesAvailable && preferences.backgroundUpdateChecksEnabled {
                 HStack(spacing: 8) {
                     Text("Check")
                         .foregroundStyle(.secondary)
@@ -144,7 +189,7 @@ struct OnboardingView: View {
                     .pickerStyle(.menu)
                     .frame(width: 180, alignment: .leading)
                 }
-            } else {
+            } else if updatesAvailable {
                 Text("Background checks stay off until you opt in. Manual update checks remain available.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -195,8 +240,6 @@ struct OnboardingView: View {
             }
             .padding(.top, 4)
 
-            Spacer()
-
             HStack {
                 Spacer()
 
@@ -212,13 +255,14 @@ struct OnboardingView: View {
             }
         }
         .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
+    @ViewBuilder
     private func onboardingSection<Content: View>(title: String,
                                                   description: String,
                                                   @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let section = VStack(alignment: .leading, spacing: 12) {
             Text(title)
                 .font(.title3.weight(.semibold))
 
@@ -232,10 +276,15 @@ struct OnboardingView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
+
+        if #available(macOS 26.0, *) {
+            section.glassEffect(.regular, in: .rect(cornerRadius: 12))
+        } else {
+            section.background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(nsColor: .controlBackgroundColor))
+            )
+        }
     }
 }
 

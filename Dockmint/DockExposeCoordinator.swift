@@ -9,9 +9,13 @@ enum DockmintPermission: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var title: String {
+        title(forMacOSMajorVersion: ProcessInfo.processInfo.operatingSystemVersion.majorVersion)
+    }
+
+    func title(forMacOSMajorVersion majorVersion: Int) -> String {
         switch self {
         case .accessibility:
-            return "Accessibility"
+            return majorVersion >= 27 ? "Device Control" : "Accessibility"
         case .inputMonitoring:
             return "Input Monitoring"
         }
@@ -647,7 +651,13 @@ final class DockExposeCoordinator: ObservableObject {
         switch phase {
         case .down:
             Logger.debug("WORKFLOW: Click down at \(location.x), \(location.y) button \(buttonNumber) clickCount=\(clickCount)")
-            let folderURLAtMouseDown = folderURLNearPoint(location)
+            let dockTargetAtMouseDown = dockTargetNearPoint(location)
+            let folderURLAtMouseDown: URL?
+            if case let .folderDockItem(folderURL)? = dockTargetAtMouseDown {
+                folderURLAtMouseDown = folderURL
+            } else {
+                folderURLAtMouseDown = nil
+            }
             Logger.debug("WORKFLOW: Folder hit test on mouse-down result=\(folderURLAtMouseDown?.path ?? "nil") point=(\(Int(location.x)),\(Int(location.y)))")
             if let folderURL = folderURLAtMouseDown {
                 if let deferred = deferredModifierFirstClickContext {
@@ -687,7 +697,12 @@ final class DockExposeCoordinator: ObservableObject {
             }
 
             let nowUptime = ProcessInfo.processInfo.systemUptime
-            let hitBundle = bundleIdentifierNearPoint(location)
+            let hitBundle: String?
+            if case let .appDockIcon(bundleIdentifier)? = dockTargetAtMouseDown {
+                hitBundle = bundleIdentifier
+            } else {
+                hitBundle = nil
+            }
             guard let clickedBundle = hitBundle else {
                 if isAppExposeInteractionActive(frontmostBefore: FrontmostAppTracker.frontmostBundleIdentifier()) {
                     Logger.debug("WORKFLOW: Non-Dock click while App Exposé tracking active; clearing tracking state")

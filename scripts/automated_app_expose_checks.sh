@@ -86,7 +86,7 @@ for attempt in 1 2; do
   fi
   break
 done
-assert_log_contains "firstClick appExpose skipped by shouldRunFirstClickAppExpose for $single_bundle" "first click on 1-window app passes through"
+assert_log_contains "firstClick appExpose skipped by multiple-window gate for $single_bundle" "first click on 1-window app passes through"
 
 # Default first click on a 2+-window app should trigger App Exposé.
 for attempt in 1 2; do

@@ -164,7 +164,7 @@ for attempt in 1 2; do
   fi
   break
 done
-assert_log_contains "firstClick appExpose skipped by shouldRunFirstClickAppExpose for $single_bundle" "plain first click on 1-window app passes through"
+assert_log_contains "firstClick appExpose skipped by multiple-window gate for $single_bundle" "plain first click on 1-window app passes through"
 
 for attempt in 1 2; do
   activate_finder

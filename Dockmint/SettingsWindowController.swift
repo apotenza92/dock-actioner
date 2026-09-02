@@ -32,7 +32,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             case .onboarding:
                 return 2
             case .settings:
-                return 2
+                return 5
             }
         }
 
@@ -41,7 +41,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             case .onboarding:
                 return NSSize(width: 420, height: 640)
             case .settings:
-                return NSSize(width: 873, height: 560)
+                return NSSize(width: 910, height: 320)
             }
         }
 
@@ -50,7 +50,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             case .onboarding:
                 return 600
             case .settings:
-                return 380
+                return 320
             }
         }
 
@@ -66,7 +66,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         var initialFocusButtonTitles: [String] {
             switch self {
             case .onboarding:
-                return ["Finish Setup", "Done", "Open Settings"]
+                return [
+                    "Finish Setup",
+                    "Done",
+                    "Open Accessibility Settings",
+                    "Open Device Control Settings",
+                    "Open Input Monitoring Settings",
+                ]
             case .settings:
                 return ["Check for Updates", "Show menu bar icon"]
             }
@@ -92,6 +98,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private var pendingOpenSession: SettingsPerformance.Session?
     private var pendingPaneSession: SettingsPerformance.Session?
     private var pendingPaneReady: SettingsPane?
+    private var onboardingContentHeight: CGFloat?
 
     init(services: AppServices) {
         self.preferences = services.preferences
@@ -105,7 +112,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             folderOpenWithOptionsStore: services.folderOpenWithOptionsStore,
             viewModel: viewModel,
             onPaneAppear: { _ in },
-            onPaneSelectionRequest: { _ in }
+            onPaneSelectionRequest: { _ in },
+            onOnboardingContentHeightChange: { _ in }
         )
         self.hostingController = NSHostingController(rootView: rootView)
         let window = NSWindow(contentViewController: hostingController)
@@ -113,7 +121,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.isReleasedWhenClosed = false
         window.level = .normal
-        window.toolbarStyle = .preference
         window.setFrame(NSRect(origin: .zero, size: Self.currentMode(for: services.preferences).preferredFrameSize), display: false)
 
         super.init(window: window)
@@ -130,10 +137,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             },
             onPaneSelectionRequest: { [weak self] pane in
                 self?.paneSelectionRequested(pane)
+            },
+            onOnboardingContentHeightChange: { [weak self] height in
+                self?.onboardingContentHeightDidChange(height)
             }
         )
 
-        folderOpenWithOptionsStore.warmIfNeeded()
         bindPreferenceChanges()
         applyWindowMode(animated: false)
         if !restoreFrame(for: window, mode: mode) {
@@ -203,6 +212,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             .sink { [weak self] isCompleted in
                 guard let self else { return }
                 if isCompleted {
+                    self.onboardingContentHeight = nil
                     self.viewModel.selectedPane = .general
                 }
                 self.applyWindowMode(animated: true)
@@ -242,6 +252,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func paneDidAppear(_ pane: SettingsPane) {
+        if pane == .folderActions {
+            folderOpenWithOptionsStore.warmIfNeeded()
+        }
         guard pane == pendingPaneReady else { return }
         pendingPaneReady = nil
         pendingPaneSession?.complete(extraMetadata: SettingsPerformance.sectionMetadata(for: pane))
@@ -301,9 +314,28 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         guard let window else { return }
         let mode = self.mode
         window.title = mode.preferredTitle
+        applyWindowChrome(for: mode, window: window)
         applyWindowSizing(for: mode, animated: animated)
         if !restoreFrame(for: window, mode: mode) {
             center(window: window)
+        }
+    }
+
+    private func applyWindowChrome(for mode: WindowMode, window: NSWindow) {
+        if #available(macOS 26.0, *), mode == .settings {
+            window.styleMask.insert(.fullSizeContentView)
+            window.titleVisibility = .hidden
+            window.titlebarAppearsTransparent = true
+            window.titlebarSeparatorStyle = .none
+            window.toolbarStyle = .unifiedCompact
+            window.isMovableByWindowBackground = true
+        } else {
+            window.styleMask.remove(.fullSizeContentView)
+            window.titleVisibility = .visible
+            window.titlebarAppearsTransparent = false
+            window.titlebarSeparatorStyle = .automatic
+            window.toolbarStyle = .preference
+            window.isMovableByWindowBackground = false
         }
     }
 
@@ -312,6 +344,22 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
         let frameSize = mode.preferredFrameSize
         let currentFrame = window.frame
+        if mode == .settings {
+            let newFrame = NSRect(
+                x: currentFrame.minX,
+                y: currentFrame.maxY - frameSize.height,
+                width: frameSize.width,
+                height: frameSize.height
+            )
+            let contentSize = window.contentRect(forFrameRect: NSRect(origin: .zero, size: frameSize)).size
+            window.minSize = frameSize
+            window.maxSize = frameSize
+            window.contentMinSize = contentSize
+            window.contentMaxSize = contentSize
+            window.setFrame(newFrame, display: true, animate: animated && !Self.animationsDisabled)
+            return
+        }
+
         let maxHeight = maximumWindowHeight(for: window, frameSize: frameSize)
         let targetHeight = min(max(currentFrame.height, mode.minimumHeight), maxHeight)
         let newFrame = NSRect(
@@ -331,6 +379,37 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.contentMinSize = minContentSize
         window.contentMaxSize = maxContentSize
         window.setFrame(newFrame, display: true, animate: animated && !Self.animationsDisabled)
+    }
+
+    private func onboardingContentHeightDidChange(_ contentHeight: CGFloat) {
+        guard mode == .onboarding, let window else { return }
+        guard onboardingContentHeight != contentHeight else { return }
+        onboardingContentHeight = contentHeight
+
+        let frameSize = mode.preferredFrameSize
+        let visibleFrame = onboardingVisibleFrame(for: window, fallbackSize: frameSize)
+        let chromeHeight = window.frame.height - window.contentRect(forFrameRect: window.frame).height
+        let targetHeight = SettingsWindowSizing.onboardingFrameHeight(
+            contentHeight: contentHeight,
+            windowChromeHeight: chromeHeight,
+            maximumFrameHeight: visibleFrame.height
+        )
+        let targetSize = NSSize(width: frameSize.width, height: targetHeight)
+        let newFrame = SettingsWindowSizing.onboardingFrame(
+            currentFrame: window.frame,
+            targetHeight: targetHeight,
+            visibleFrame: visibleFrame
+        )
+
+        window.minSize = targetSize
+        window.maxSize = targetSize
+        window.setFrame(newFrame, display: true, animate: false)
+    }
+
+    private func onboardingVisibleFrame(for window: NSWindow, fallbackSize: NSSize) -> NSRect {
+        window.screen?.visibleFrame
+            ?? targetScreen()?.visibleFrame
+            ?? NSRect(origin: window.frame.origin, size: fallbackSize)
     }
 
     private func maximumWindowHeight(for window: NSWindow, frameSize: NSSize) -> CGFloat {
@@ -353,13 +432,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             return false
         }
         let defaultSize = mode.preferredFrameSize
-        let storedVersion = defaults.integer(forKey: mode.frameDefaultsVersionKey)
         frame.size.width = defaultSize.width
-        if storedVersion < mode.frameDefaultsVersion {
-            frame.size.height = defaultSize.height
-        } else {
-            frame.size.height = max(frame.size.height, mode.minimumHeight)
-        }
+        frame.size.height = defaultSize.height
         window.setFrame(frame, display: false)
         return true
     }
@@ -393,6 +467,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
         let mode = self.mode
+        if mode == .settings {
+            return mode.preferredFrameSize
+        }
         let maxHeight = maximumWindowHeight(for: sender, frameSize: mode.preferredFrameSize)
         return NSSize(width: frameSize.width, height: min(max(frameSize.height, mode.minimumHeight), maxHeight))
     }

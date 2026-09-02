@@ -57,7 +57,54 @@ struct ResolvedScrollDelta: Equatable {
     }
 }
 
+enum ContinuousScrollGestureDisposition: Equatable {
+    case evaluate
+    case returnLatched(Bool)
+    case passThrough
+}
+
+struct ContinuousScrollGestureState {
+    private(set) var isActive = false
+    private var consume = false
+    private var lastEventUptime: TimeInterval = 0
+
+    mutating func disposition(nowUptime: TimeInterval,
+                              scrollPhase: Int,
+                              momentumPhase: Int,
+                              resetAfterSilence: TimeInterval = 0.25) -> ContinuousScrollGestureDisposition {
+        if isActive, nowUptime - lastEventUptime > resetAfterSilence {
+            isActive = false
+            consume = false
+        }
+        lastEventUptime = nowUptime
+
+        let beganMask = 1 | 16 // began | mayBegin
+        if (scrollPhase & beganMask) != 0 {
+            isActive = false
+            consume = false
+        }
+
+        if !isActive, momentumPhase != 0 {
+            return .passThrough
+        }
+        if isActive {
+            return .returnLatched(consume)
+        }
+        return .evaluate
+    }
+
+    mutating func latch(consume: Bool) {
+        isActive = true
+        self.consume = consume
+    }
+}
+
 enum DockDecisionEngine {
+    static func shouldReplayConsumedMouseDownForDrag(mouseDownWasConsumed: Bool,
+                                                     dragThresholdExceeded: Bool) -> Bool {
+        mouseDownWasConsumed && dragThresholdExceeded
+    }
+
     static func isAppExposeInteractionActive(hasInvocationToken: Bool,
                                              frontmostBefore: String?,
                                              hasTrackingState: Bool,

@@ -26,18 +26,28 @@ final class DockClickEventTap {
 
     private(set) var lastStartError: String?
 
-    private var continuousScrollActive = false
-    private var continuousScrollConsume = false
-    private var lastContinuousScrollTime: TimeInterval = 0
+    private var continuousScrollGesture = ContinuousScrollGestureState()
     private var leftMouseDownPoint: CGPoint?
     private var leftMouseDownButton: Int?
     private var leftMouseDownFlags: CGEventFlags?
     private var leftMouseDownUptime: TimeInterval?
+    private var leftMouseDownWasConsumed = false
     private var leftMouseDragExceededThreshold = false
     private let leftMouseDragThreshold: CGFloat = 6
     private let duplicateMouseDownSuppressionWindow: TimeInterval = 0.35
     private var timeoutPassThroughUntilUptime: TimeInterval = 0
     private let timeoutPassThroughCooldown: TimeInterval = 0.18
+
+    private static func replayConsumedMouseDownForDrag(event: CGEvent,
+                                                       at downPoint: CGPoint,
+                                                       buttonNumber: Int,
+                                                       flags: CGEventFlags) {
+        event.type = .leftMouseDown
+        event.location = downPoint
+        event.flags = flags
+        event.setIntegerValueField(.mouseEventButtonNumber, value: Int64(buttonNumber))
+        event.setIntegerValueField(.mouseEventClickState, value: 1)
+    }
 
     func start(
         clickHandler: @escaping (CGPoint, Int, Int, CGEventFlags, ClickPhase) -> Bool,
@@ -144,13 +154,12 @@ final class DockClickEventTap {
     }
 
     private func resetInteractionState() {
-        continuousScrollActive = false
-        continuousScrollConsume = false
-        lastContinuousScrollTime = 0
+        continuousScrollGesture = ContinuousScrollGestureState()
         leftMouseDownPoint = nil
         leftMouseDownButton = nil
         leftMouseDownFlags = nil
         leftMouseDownUptime = nil
+        leftMouseDownWasConsumed = false
         leftMouseDragExceededThreshold = false
     }
 
@@ -214,6 +223,7 @@ final class DockClickEventTap {
                     leftMouseDownButton = nil
                     leftMouseDownFlags = nil
                     leftMouseDownUptime = nil
+                    leftMouseDownWasConsumed = false
                     leftMouseDragExceededThreshold = false
                 }
                 else {
@@ -222,6 +232,7 @@ final class DockClickEventTap {
                     leftMouseDownButton = nil
                     leftMouseDownFlags = nil
                     leftMouseDownUptime = nil
+                    leftMouseDownWasConsumed = false
                     leftMouseDragExceededThreshold = false
                 }
             }
@@ -230,9 +241,11 @@ final class DockClickEventTap {
             leftMouseDownButton = buttonNumber
             leftMouseDownFlags = currentFlags
             leftMouseDownUptime = nowUptime
+            leftMouseDownWasConsumed = false
             leftMouseDragExceededThreshold = false
             Logger.debug("DockClickEventTap: Raw click down at \(location.x), \(location.y) (button: \(buttonNumber), clickCount: \(clickCount))")
             let shouldConsume = clickHandler?(location, buttonNumber, clickCount, currentFlags, .down) ?? false
+            leftMouseDownWasConsumed = shouldConsume
             Logger.debug("DockClickEventTap: Click down consume=\(shouldConsume)")
             return shouldConsume
 
@@ -246,6 +259,19 @@ final class DockClickEventTap {
                     let downFlags = leftMouseDownFlags ?? currentFlags
                     Logger.debug("DockClickEventTap: Drag threshold exceeded (distance=\(hypot(dx, dy)))")
                     _ = clickHandler?(location, downButton, clickCount, downFlags, .dragged)
+                    if DockDecisionEngine.shouldReplayConsumedMouseDownForDrag(
+                        mouseDownWasConsumed: leftMouseDownWasConsumed,
+                        dragThresholdExceeded: leftMouseDragExceededThreshold
+                    ) {
+                        // The Dock cannot begin a reorder if our configured click action consumed
+                        // the physical mouse-down. Replace this first threshold-crossing drag event
+                        // with that down event; later drag events and mouse-up continue normally.
+                        Self.replayConsumedMouseDownForDrag(event: event,
+                                                           at: downPoint,
+                                                           buttonNumber: downButton,
+                                                           flags: downFlags)
+                        Logger.debug("DockClickEventTap: Replaying consumed mouse down to begin Dock drag")
+                    }
                 }
             }
             return false
@@ -260,6 +286,7 @@ final class DockClickEventTap {
             leftMouseDownButton = nil
             leftMouseDownFlags = nil
             leftMouseDownUptime = nil
+            leftMouseDownWasConsumed = false
             leftMouseDragExceededThreshold = false
             if dragged {
                 Logger.debug("DockClickEventTap: Suppressing consume on mouse up due to drag")
@@ -275,10 +302,25 @@ final class DockClickEventTap {
             return false
         }
 
+        let isContinuous = event.getIntegerValueField(.scrollWheelEventIsContinuous) != 0
+        if isContinuous {
+            let disposition = continuousScrollGesture.disposition(
+                nowUptime: ProcessInfo.processInfo.systemUptime,
+                scrollPhase: Int(event.getIntegerValueField(.scrollWheelEventScrollPhase)),
+                momentumPhase: Int(event.getIntegerValueField(.scrollWheelEventMomentumPhase))
+            )
+            switch disposition {
+            case .evaluate:
+                break
+            case .returnLatched(let consume):
+                return consume
+            case .passThrough:
+                return false
+            }
+        }
+
         let location = event.location
         let flags = event.flags
-        
-        let isContinuous = event.getIntegerValueField(.scrollWheelEventIsContinuous) != 0
 
         let nsEvent = NSEvent(cgEvent: event)
         let primaryAxis = DecisionScrollAxisDelta(
@@ -299,8 +341,6 @@ final class DockClickEventTap {
                                                                              isContinuous: isContinuous,
                                                                              prefersAlternateAxis: prefersAlternateAxis)
         let sourcePID = event.getIntegerValueField(.eventSourceUnixProcessID)
-        let sourceBundleIdentifier = sourceBundleIdentifier(for: event)
-        let nowUptime = ProcessInfo.processInfo.systemUptime
         let userOverrideInvertDiscrete = UserDefaults.standard.bool(forKey: Self.invertDiscreteScrollDirectionKey)
         let invertDiscreteDirection = DockDecisionEngine.shouldInvertDiscreteScrollDirection(
             isContinuous: isContinuous,
@@ -312,41 +352,11 @@ final class DockClickEventTap {
         let effectiveDelta = DockDecisionEngine.effectiveScrollDelta(delta: resolvedDelta,
                                                                      isContinuous: isContinuous,
                                                                      invertDiscreteDirection: invertDiscreteDirection)
-        let scrollPhase = Int(event.getIntegerValueField(.scrollWheelEventScrollPhase))
-        let momentumPhase = Int(event.getIntegerValueField(.scrollWheelEventMomentumPhase))
-
-        if isContinuous {
-            // Collapse trackpad/magic mouse scroll into a single logical gesture for action triggers.
-            // We still decide whether to consume the whole gesture based on the first eligible event.
-            let resetAfterSilence: TimeInterval = 0.25
-            if continuousScrollActive, nowUptime - lastContinuousScrollTime > resetAfterSilence {
-                continuousScrollActive = false
-                continuousScrollConsume = false
-            }
-            lastContinuousScrollTime = nowUptime
-
-            // New gesture start hint.
-            let beganMask = 1 | 16 // began | mayBegin
-            if (scrollPhase & beganMask) != 0 {
-                continuousScrollActive = false
-                continuousScrollConsume = false
-            }
-
-            // Ignore momentum-only sequences when we didn't start consuming.
-            if !continuousScrollActive, momentumPhase != 0 {
-                return false
-            }
-
-            if continuousScrollActive {
-                return continuousScrollConsume
-            }
-        }
-        
         // Require a small threshold so accidental micro-movements are ignored, but single notches still count.
         let threshold = 0.2
         if abs(effectiveDelta) < threshold {
-            Logger.debug("DockClickEventTap: Scroll delta below threshold at \(location.x), \(location.y) (yAppKit: \(primaryAxis.appKitDelta), yPoint: \(primaryAxis.pointDelta), yFixed: \(primaryAxis.fixedDelta), yCoarse: \(primaryAxis.coarseDelta), xAppKit: \(alternateAxis.appKitDelta), xPoint: \(alternateAxis.pointDelta), xFixed: \(alternateAxis.fixedDelta), xCoarse: \(alternateAxis.coarseDelta), prefersAlternateAxis: \(prefersAlternateAxis), sourcePID: \(sourcePID), sourceBundle: \(sourceBundleIdentifier ?? "nil"), inverted: \(nsEvent?.isDirectionInvertedFromDevice ?? false), deltaSource: \(resolvedDelta.source.rawValue), reverseMouseScrollActions: \(invertDiscreteDirection), flipDiscreteApplied: \(inversionApplied), rawDelta: \(resolvedDelta.value), effectiveDelta: \(effectiveDelta), continuous: \(isContinuous)); ignoring")
-            return isContinuous ? continuousScrollConsume : false
+            Logger.debug("DockClickEventTap: Scroll delta below threshold at \(location.x), \(location.y) (yAppKit: \(primaryAxis.appKitDelta), yPoint: \(primaryAxis.pointDelta), yFixed: \(primaryAxis.fixedDelta), yCoarse: \(primaryAxis.coarseDelta), xAppKit: \(alternateAxis.appKitDelta), xPoint: \(alternateAxis.pointDelta), xFixed: \(alternateAxis.fixedDelta), xCoarse: \(alternateAxis.coarseDelta), prefersAlternateAxis: \(prefersAlternateAxis), sourcePID: \(sourcePID), sourceBundle: \(sourceBundleIdentifier(for: event) ?? "nil"), inverted: \(nsEvent?.isDirectionInvertedFromDevice ?? false), deltaSource: \(resolvedDelta.source.rawValue), reverseMouseScrollActions: \(invertDiscreteDirection), flipDiscreteApplied: \(inversionApplied), rawDelta: \(resolvedDelta.value), effectiveDelta: \(effectiveDelta), continuous: \(isContinuous)); ignoring")
+            return false
         }
         
         // Route Up/Down by the effective delta sign for this event/device.
@@ -360,13 +370,12 @@ final class DockClickEventTap {
         )
         let direction: ScrollDirection = resolvedDirection == .up ? .up : .down
 
-        Logger.debug("DockClickEventTap: Raw scroll at \(location.x), \(location.y) (yAppKit: \(primaryAxis.appKitDelta), yPoint: \(primaryAxis.pointDelta), yFixed: \(primaryAxis.fixedDelta), yCoarse: \(primaryAxis.coarseDelta), xAppKit: \(alternateAxis.appKitDelta), xPoint: \(alternateAxis.pointDelta), xFixed: \(alternateAxis.fixedDelta), xCoarse: \(alternateAxis.coarseDelta), prefersAlternateAxis: \(prefersAlternateAxis), sourcePID: \(sourcePID), sourceBundle: \(sourceBundleIdentifier ?? "nil"), inverted: \(nsEvent?.isDirectionInvertedFromDevice ?? false), deltaSource: \(resolvedDelta.source.rawValue), appKitContentMapping: \(appKitInterpretedUsesContentDirection), reverseMouseScrollActions: \(invertDiscreteDirection), flipDiscreteApplied: \(inversionApplied), rawDelta: \(resolvedDelta.value), effectiveDelta: \(effectiveDelta), dir: \(direction == .up ? "up" : "down"), continuous: \(isContinuous))")
+        Logger.debug("DockClickEventTap: Raw scroll at \(location.x), \(location.y) (yAppKit: \(primaryAxis.appKitDelta), yPoint: \(primaryAxis.pointDelta), yFixed: \(primaryAxis.fixedDelta), yCoarse: \(primaryAxis.coarseDelta), xAppKit: \(alternateAxis.appKitDelta), xPoint: \(alternateAxis.pointDelta), xFixed: \(alternateAxis.fixedDelta), xCoarse: \(alternateAxis.coarseDelta), prefersAlternateAxis: \(prefersAlternateAxis), sourcePID: \(sourcePID), sourceBundle: \(sourceBundleIdentifier(for: event) ?? "nil"), inverted: \(nsEvent?.isDirectionInvertedFromDevice ?? false), deltaSource: \(resolvedDelta.source.rawValue), appKitContentMapping: \(appKitInterpretedUsesContentDirection), reverseMouseScrollActions: \(invertDiscreteDirection), flipDiscreteApplied: \(inversionApplied), rawDelta: \(resolvedDelta.value), effectiveDelta: \(effectiveDelta), dir: \(direction == .up ? "up" : "down"), continuous: \(isContinuous))")
         let shouldConsume = scrollHandler?(location, direction, flags) ?? false
         Logger.debug("DockClickEventTap: Scroll consume=\(shouldConsume)")
 
         if isContinuous {
-            continuousScrollActive = true
-            continuousScrollConsume = shouldConsume
+            continuousScrollGesture.latch(consume: shouldConsume)
         }
         return shouldConsume
     }

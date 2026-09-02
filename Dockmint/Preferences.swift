@@ -172,9 +172,11 @@ final class DockFolderOpenApplicationOptionsCache {
     static let shared = DockFolderOpenApplicationOptionsCache()
 
     private var cachedOptions: [DockFolderOpenApplicationOption]
+    private let discoverOptions: () -> [DockFolderOpenApplicationOption]
 
-    private init() {
-        cachedOptions = DockFolderOpenApplicationCatalog.discoveredOptions()
+    init(discoverOptions: @escaping () -> [DockFolderOpenApplicationOption] = DockFolderOpenApplicationCatalog.discoveredOptions) {
+        self.discoverOptions = discoverOptions
+        cachedOptions = DockFolderOpenApplicationCatalog.minimalOptions()
     }
 
     func options(including selectedIdentifier: String? = nil) -> [DockFolderOpenApplicationOption] {
@@ -192,7 +194,7 @@ final class DockFolderOpenApplicationOptionsCache {
     }
 
     func refresh() {
-        cachedOptions = DockFolderOpenApplicationCatalog.discoveredOptions()
+        cachedOptions = discoverOptions()
     }
 }
 
@@ -378,6 +380,15 @@ struct DockFolderAction: Codable, Equatable {
 
     var appliesDockOverrides: Bool {
         dockSortBy != .current || dockDisplayAs != .current || dockViewContentAs != .current
+    }
+
+    var usingSystemDefaults: DockFolderAction {
+        DockFolderAction(
+            openInApplicationIdentifier: openInApplicationIdentifier,
+            view: .automatic,
+            sortBy: .none,
+            groupBy: .none
+        )
     }
 
     var storageValue: String {
@@ -1743,7 +1754,7 @@ final class Preferences: ObservableObject {
 
     private static func loadFolderAction(from defaults: UserDefaults, forKey key: String) -> DockFolderAction? {
         guard let raw = defaults.string(forKey: key) else { return nil }
-        return DockFolderAction(storageValue: raw)
+        return DockFolderAction(storageValue: raw).usingSystemDefaults
     }
 
     private static func seedIfMissing(_ action: DockAction, in defaults: UserDefaults, forKey key: String) {

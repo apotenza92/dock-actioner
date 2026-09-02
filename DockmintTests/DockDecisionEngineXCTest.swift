@@ -1,6 +1,45 @@
 import XCTest
 
 final class DockDecisionEngineXCTest: XCTestCase {
+    func testContinuousScrollGestureReturnsLatchedDecisionUntilNextGesture() {
+        var state = ContinuousScrollGestureState()
+
+        XCTAssertEqual(state.disposition(nowUptime: 1, scrollPhase: 1, momentumPhase: 0), .evaluate)
+        state.latch(consume: true)
+        XCTAssertEqual(state.disposition(nowUptime: 1.01, scrollPhase: 4, momentumPhase: 0), .returnLatched(true))
+        XCTAssertEqual(state.disposition(nowUptime: 1.02, scrollPhase: 1, momentumPhase: 0), .evaluate)
+    }
+
+    func testContinuousScrollGestureIgnoresOrphanMomentumAndResetsAfterSilence() {
+        var state = ContinuousScrollGestureState()
+
+        XCTAssertEqual(state.disposition(nowUptime: 1, scrollPhase: 0, momentumPhase: 2), .passThrough)
+        XCTAssertEqual(state.disposition(nowUptime: 2, scrollPhase: 0, momentumPhase: 0), .evaluate)
+        state.latch(consume: false)
+        XCTAssertEqual(state.disposition(nowUptime: 2.3, scrollPhase: 4, momentumPhase: 0), .evaluate)
+    }
+
+    func testConsumedMouseDownIsReplayedWhenMovementBecomesDrag() {
+        XCTAssertTrue(
+            DockDecisionEngine.shouldReplayConsumedMouseDownForDrag(
+                mouseDownWasConsumed: true,
+                dragThresholdExceeded: true
+            )
+        )
+        XCTAssertFalse(
+            DockDecisionEngine.shouldReplayConsumedMouseDownForDrag(
+                mouseDownWasConsumed: false,
+                dragThresholdExceeded: true
+            )
+        )
+        XCTAssertFalse(
+            DockDecisionEngine.shouldReplayConsumedMouseDownForDrag(
+                mouseDownWasConsumed: true,
+                dragThresholdExceeded: false
+            )
+        )
+    }
+
     func testAppExposeInteractionActiveWithInvocationToken() {
         XCTAssertTrue(
             DockDecisionEngine.isAppExposeInteractionActive(

@@ -49,7 +49,11 @@ enum DockHitTest {
         guard let element = element(at: point) else { return .outsideDock }
         guard isInDockProcess(element) else { return .outsideDock }
 
-        var current: AXUIElement? = element
+        if let pointKind = dockItemKind(for: element) {
+            return pointKind
+        }
+
+        var current: AXUIElement? = parent(of: element)
         while let el = current, isInDockProcess(el) {
             if let pointKind = dockItemKind(for: el) {
                 return pointKind

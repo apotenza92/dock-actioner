@@ -2,6 +2,46 @@ import XCTest
 
 @MainActor
 final class PreferencesDefaultsXCTest: XCTestCase {
+    func testDisabledDebugLoggingDoesNotEvaluateMessage() {
+        let defaults = UserDefaults.standard
+        let key = "persistentDiagnosticFileLoggingEnabled"
+        let originalValue = defaults.object(forKey: key)
+        defer {
+            if let originalValue {
+                defaults.set(originalValue, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
+        }
+
+        defaults.set(false, forKey: key)
+        var messageWasEvaluated = false
+
+        Logger.debug({
+            messageWasEvaluated = true
+            return "debug message"
+        }())
+
+        XCTAssertFalse(messageWasEvaluated)
+    }
+
+    func testFolderApplicationOptionsCacheDiscoversOnlyWhenRefreshed() {
+        var discoveryCount = 0
+        let discovered = DockFolderOpenApplicationOption(identifier: "com.example.Editor", displayName: "Editor")
+        let cache = DockFolderOpenApplicationOptionsCache {
+            discoveryCount += 1
+            return DockFolderOpenApplicationCatalog.minimalOptions() + [discovered]
+        }
+
+        XCTAssertEqual(cache.options(), DockFolderOpenApplicationCatalog.minimalOptions())
+        XCTAssertEqual(discoveryCount, 0)
+
+        cache.refresh()
+
+        XCTAssertEqual(cache.options(), DockFolderOpenApplicationCatalog.minimalOptions() + [discovered])
+        XCTAssertEqual(discoveryCount, 1)
+    }
+
     func testFreshPreferencesLoadShippedGeneralDefaults() {
         let defaults = isolatedDefaults()
         let preferences = Preferences(testingUserDefaults: defaults)

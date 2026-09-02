@@ -4,44 +4,24 @@ import SwiftUI
 
 private enum SettingsLayout {
     static let windowPadding: CGFloat = 14
+    static let sidebarWidth: CGFloat = 156
     static let tableCardPadding: CGFloat = 14
     static let pickerWidth: CGFloat = 172
-    static let generalBottomInset: CGFloat = 100
     static let paneHeaderSpacing: CGFloat = 12
-    static let sectionSpacing: CGFloat = 16
     static let rowSpacing: CGFloat = 10
     static let columnSpacing: CGFloat = 14
-    static let updatesLeadingInset: CGFloat = 10
     static let formRowSpacing: CGFloat = 8
-    static let tableCornerRadius: CGFloat = 12
     static let tableCellSpacing: CGFloat = 12
     static let actionModifierColumnWidth: CGFloat = 144
     static let actionColumnWidth: CGFloat = 172
-    static let folderModifierColumnWidth: CGFloat = 128
-    static let folderGestureColumnWidth: CGFloat = 96
-    static let folderOpenWithColumnWidth: CGFloat = 134
-    static let folderDetailControlWidth: CGFloat = 132
-    static let folderDetailLabelWidth: CGFloat = 36
-    static let folderDetailInlineSpacing: CGFloat = 4
-    static let folderDetailPickerWidth: CGFloat = 134
     static let appActionsCardWidth: CGFloat =
         actionModifierColumnWidth +
         (actionColumnWidth * 3) +
         (tableCellSpacing * 3) +
         (tableCardPadding * 2)
-    static let folderOptionsPreferredWidth: CGFloat =
-        ((folderDetailLabelWidth + folderDetailInlineSpacing + folderDetailPickerWidth) * 3) +
-        (tableCellSpacing * 2)
-    static let folderActionsCardWidth: CGFloat =
-        folderGestureColumnWidth +
-        folderOpenWithColumnWidth +
-        folderOptionsPreferredWidth +
-        (tableCellSpacing * 2) +
-        (tableCardPadding * 2)
-    static let windowContentWidth: CGFloat =
-        max(appActionsCardWidth, folderActionsCardWidth)
+    static let windowContentWidth: CGFloat = appActionsCardWidth
     static let generalColumnWidth: CGFloat = 236
-    static let updatesColumnWidth: CGFloat = 280
+    static let updatesColumnWidth: CGFloat = 240
     static let permissionsColumnWidth: CGFloat =
         windowContentWidth - generalColumnWidth - updatesColumnWidth - (columnSpacing * 2)
     static let generalContentWidth: CGFloat = windowContentWidth
@@ -65,28 +45,70 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         }
     }
 
-    var symbolName: String {
-        switch self {
-        case .general:
-            return "gearshape"
-        case .appActions:
-            return "cursorarrow.click.2"
-        case .folderActions:
-            return "folder"
-        }
-    }
-
-    var windowFrameSize: NSSize {
-        switch self {
-        case .general, .appActions, .folderActions:
-            return NSSize(width: 873, height: 560)
-        }
-    }
 }
 
 @MainActor
 final class SettingsWindowViewModel: ObservableObject {
     @Published var selectedPane: SettingsPane = .general
+}
+
+private struct PopUpPickerOption<Value: Hashable> {
+    let value: Value
+    let title: String
+}
+
+private struct FullWidthPopUpPicker<Value: Hashable>: NSViewRepresentable {
+    let options: [PopUpPickerOption<Value>]
+    @Binding var selection: Value
+    let isEnabled: Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(selection: $selection)
+    }
+
+    func makeNSView(context: Context) -> NSPopUpButton {
+        let button = NSPopUpButton(frame: .zero, pullsDown: false)
+        button.bezelStyle = .rounded
+        button.target = context.coordinator
+        button.action = #selector(Coordinator.selectionChanged(_:))
+        button.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        button.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return button
+    }
+
+    func updateNSView(_ button: NSPopUpButton, context: Context) {
+        context.coordinator.selection = $selection
+
+        let currentTitles = button.itemTitles
+        let expectedTitles = options.map(\.title)
+        if currentTitles != expectedTitles {
+            button.removeAllItems()
+            for option in options {
+                button.addItem(withTitle: option.title)
+            }
+        }
+
+        context.coordinator.options = options.map(\.value)
+        if let selectedIndex = options.firstIndex(where: { $0.value == selection }) {
+            button.selectItem(at: selectedIndex)
+        }
+        button.isEnabled = isEnabled
+    }
+
+    final class Coordinator: NSObject {
+        var selection: Binding<Value>
+        var options: [Value] = []
+
+        init(selection: Binding<Value>) {
+            self.selection = selection
+        }
+
+        @objc func selectionChanged(_ sender: NSPopUpButton) {
+            let index = sender.indexOfSelectedItem
+            guard options.indices.contains(index) else { return }
+            selection.wrappedValue = options[index]
+        }
+    }
 }
 
 struct PreferencesView: View {
@@ -99,11 +121,6 @@ struct PreferencesView: View {
     let onPaneSelectionRequest: (SettingsPane) -> Void
 
     private let appDisplayName = AppServices.appDisplayName
-    private static let automationSectionNavigationEnabled: Bool = {
-        AppIdentity.boolFlag(primary: "DOCKMINT_TEST_SUITE", legacy: "DOCKTOR_TEST_SUITE") ||
-        AppIdentity.boolFlag(primary: "DOCKMINT_SETTINGS_PERF", legacy: "DOCKTOR_SETTINGS_PERF")
-    }()
-
     private var loginItemAvailable: Bool {
         AppIdentity.supportsLoginItem
     }
@@ -258,113 +275,61 @@ struct PreferencesView: View {
         }
     }
 
-    private enum FolderActionDetailField: Hashable {
-        case finderView
-        case finderGroupBy
-        case finderSortBy
-        case dockSortBy
-        case dockDisplayAs
-        case dockViewContentAs
-
-        var title: String {
-            switch self {
-            case .finderView:
-                return "View"
-            case .finderGroupBy:
-                return "Group"
-            case .finderSortBy:
-                return "Sort"
-            case .dockSortBy:
-                return "Sort"
-            case .dockDisplayAs:
-                return "Display"
-            case .dockViewContentAs:
-                return "Content"
+    var body: some View {
+        NavigationSplitView {
+            List(SettingsPane.allCases, selection: paneSelection) { pane in
+                Text(pane.title)
+                    .tag(pane)
+                    .accessibilityIdentifier("settings-sidebar-\(pane.rawValue)")
             }
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(
+                min: SettingsLayout.sidebarWidth,
+                ideal: SettingsLayout.sidebarWidth,
+                max: SettingsLayout.sidebarWidth
+            )
+        } detail: {
+            selectedPane
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .navigationSplitViewStyle(.balanced)
+        .onAppear {
+            reportPaneReady(viewModel.selectedPane)
+        }
+        .onChange(of: viewModel.selectedPane) { pane in
+            reportPaneReady(pane)
         }
     }
 
-    var body: some View {
-        singlePagePane
+    private var paneSelection: Binding<SettingsPane?> {
+        Binding(
+            get: { viewModel.selectedPane },
+            set: { pane in
+                guard let pane else { return }
+                onPaneSelectionRequest(pane)
+            }
+        )
+    }
+
+    @ViewBuilder
+    private var selectedPane: some View {
+        switch viewModel.selectedPane {
+        case .general:
+            generalPane
+        case .appActions:
+            appActionsPane
+        case .folderActions:
+            folderActionsPane
+        }
     }
 
     private var generalPane: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 0) {
-                generalOverviewSection
-            }
-            .frame(width: SettingsLayout.generalContentWidth, alignment: .leading)
-            .padding(.bottom, SettingsLayout.generalBottomInset)
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-        .frame(width: SettingsLayout.windowContentWidth, alignment: .topLeading)
-        .padding(SettingsLayout.windowPadding)
-    }
-
-    private var singlePagePane: some View {
-        ScrollViewReader { proxy in
-            VStack(alignment: .leading, spacing: SettingsLayout.paneHeaderSpacing) {
-                if Self.automationSectionNavigationEnabled {
-                    automationSectionNavigationBar
-                }
-
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        singlePageGeneralSection
-                            .id(SettingsPane.general.id)
-                            .accessibilityIdentifier("settings-section-general")
-                            .accessibilityLabel("General Section")
-
-                        sectionDivider
-
-                        VStack(alignment: .leading, spacing: 0) {
-                            paneSectionHeader(
-                                title: "App Actions",
-                                description: "Choose what happens when you click or scroll on app icons in the Dock.",
-                                buttonTitle: "Reset App Actions",
-                                action: preferences.resetAppActionsToDefaults
-                            )
-
-                            appActionsTable
-                        }
-                        .id(SettingsPane.appActions.id)
-                        .accessibilityIdentifier("settings-section-app-actions")
-                        .accessibilityLabel("App Actions Section")
-
-                        sectionDivider
-
-                        VStack(alignment: .leading, spacing: 0) {
-                            paneSectionHeader(
-                                title: "Folder Actions",
-                                description: "Choose what happens when you click or scroll on folder stacks in the Dock.",
-                                buttonTitle: "Reset Folder Actions",
-                                action: preferences.resetFolderActionsToDefaults
-                            )
-
-                            folderActionsTables
-                        }
-                        .id(SettingsPane.folderActions.id)
-                        .accessibilityIdentifier("settings-section-folder-actions")
-                        .accessibilityLabel("Folder Actions Section")
-                    }
-                    .frame(width: SettingsLayout.windowContentWidth, alignment: .topLeading)
-                    .padding(SettingsLayout.windowPadding)
-                }
-                .scrollIndicators(.automatic)
-            }
-            .onAppear {
-                scrollToSelectedPane(using: proxy, animated: false)
-                reportPaneReady(viewModel.selectedPane)
-            }
-            .onChange(of: viewModel.selectedPane) { pane in
-                scrollToSelectedPane(using: proxy, animated: false)
-                reportPaneReady(pane)
-            }
-        }
-    }
-
-    private var singlePageGeneralSection: some View {
         generalOverviewSection
+            .frame(width: SettingsLayout.generalContentWidth, alignment: .topLeading)
+            .accessibilityIdentifier("settings-section-general")
+            .accessibilityLabel("General Section")
+            .frame(width: SettingsLayout.windowContentWidth, alignment: .topLeading)
+            .padding(SettingsLayout.windowPadding)
     }
 
     private var generalOverviewSection: some View {
@@ -373,7 +338,6 @@ struct PreferencesView: View {
                 .frame(width: SettingsLayout.generalColumnWidth, alignment: .topLeading)
 
             updatesSettingsGroup
-                .padding(.leading, SettingsLayout.updatesLeadingInset)
                 .frame(width: SettingsLayout.updatesColumnWidth, alignment: .topLeading)
 
             permissionsSettingsGroup
@@ -403,7 +367,7 @@ struct PreferencesView: View {
 
                 if loginItemAvailable {
                     Toggle("Start \(appDisplayName) at login", isOn: $preferences.startAtLogin)
-                } else {
+                } else if !AppIdentity.isDevelopmentIdentity {
                     Text("Start at Login unavailable")
                         .font(.body.weight(.medium))
                 }
@@ -455,12 +419,12 @@ struct PreferencesView: View {
                 Toggle("Enable background update checks", isOn: $preferences.backgroundUpdateChecksEnabled)
                     .disabled(!updatesAvailable)
 
-                if !updatesAvailable {
+                if !updatesAvailable && !AppIdentity.isDevelopmentIdentity {
                     Text("Update unavailable")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                } else if preferences.backgroundUpdateChecksEnabled {
+                } else if updatesAvailable && preferences.backgroundUpdateChecksEnabled {
                     HStack(alignment: .center, spacing: SettingsLayout.formRowSpacing) {
                         Text("Check")
                             .foregroundStyle(.secondary)
@@ -474,7 +438,7 @@ struct PreferencesView: View {
                         .pickerStyle(.menu)
                         .frame(width: SettingsLayout.pickerWidth, alignment: .leading)
                     }
-                } else {
+                } else if updatesAvailable {
                     Text("Background checks are off until you opt in. Manual update checks remain available.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -483,7 +447,9 @@ struct PreferencesView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(updateManager.currentVersionText)
-                    Text(updateManager.updateStatusText)
+                    if !AppIdentity.isDevelopmentIdentity {
+                        Text(updateManager.updateStatusText)
+                    }
                 }
                 .font(.callout)
                 .foregroundStyle(.secondary)
@@ -496,7 +462,6 @@ struct PreferencesView: View {
         SettingsGroup(title: "Permissions") {
             SharedPermissionsSection(
                 coordinator: coordinator,
-                buttonTitle: "Open Settings",
                 footerText: permissionsStatusNote
             )
         }
@@ -505,7 +470,7 @@ struct PreferencesView: View {
     private var permissionsStatusNote: String? {
         var missing: [String] = []
         if !coordinator.accessibilityGranted {
-            missing.append("Accessibility")
+            missing.append(DockmintPermission.accessibility.title)
         }
         if !coordinator.inputMonitoringGranted {
             missing.append("Input Monitoring")
@@ -526,27 +491,31 @@ struct PreferencesView: View {
 
             appActionsTable
         }
+        .accessibilityIdentifier("settings-section-app-actions")
+        .accessibilityLabel("App Actions Section")
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(width: SettingsLayout.windowContentWidth, alignment: .topLeading)
         .padding(SettingsLayout.windowPadding)
     }
 
     private var folderActionsPane: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                paneSectionHeader(
-                    title: "Folder Actions",
-                    description: "Choose what happens when you click or scroll on folder stacks in the Dock. System leaves Finder in charge of remembered window, view, group, and sort state; choosing explicit Finder options makes Dockmint override them.",
-                    buttonTitle: "Reset Folder Actions",
-                    action: preferences.resetFolderActionsToDefaults
-                )
+        VStack(alignment: .leading, spacing: 0) {
+            paneSectionHeader(
+                title: "Folder Actions",
+                description: "Choose what happens when you click or scroll on folder stacks in the Dock.",
+                buttonTitle: "Reset Folder Actions",
+                action: preferences.resetFolderActionsToDefaults
+            )
 
-                folderActionsTables
-            }
-            .frame(width: SettingsLayout.windowContentWidth, alignment: .topLeading)
-            .padding(SettingsLayout.windowPadding)
+            folderActionsTables
         }
-        .scrollIndicators(.automatic)
+        .accessibilityIdentifier("settings-section-folder-actions")
+        .accessibilityLabel("Folder Actions Section")
+        .frame(width: SettingsLayout.windowContentWidth, alignment: .topLeading)
+        .padding(SettingsLayout.windowPadding)
+        .onAppear {
+            folderOpenWithOptionsStore.warmIfNeeded()
+        }
     }
 
     private var applicationButtons: some View {
@@ -566,43 +535,6 @@ struct PreferencesView: View {
         .buttonStyle(.bordered)
     }
 
-    private var automationSectionNavigationBar: some View {
-        HStack(spacing: 8) {
-            Text("Automation Sections")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            ForEach(SettingsPane.allCases) { pane in
-                Button("\(pane.title) Section") {
-                    onPaneSelectionRequest(pane)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .accessibilityIdentifier("settings-automation-\(pane.rawValue)")
-            }
-        }
-        .padding(.horizontal, SettingsLayout.windowPadding)
-        .padding(.top, SettingsLayout.windowPadding)
-    }
-
-    private var sectionDivider: some View {
-        Divider()
-            .padding(.vertical, SettingsLayout.sectionSpacing)
-    }
-
-    private func scrollToSelectedPane(using proxy: ScrollViewProxy, animated: Bool) {
-        let scrollAction = {
-            proxy.scrollTo(viewModel.selectedPane.id, anchor: .top)
-        }
-        if animated {
-            withAnimation {
-                scrollAction()
-            }
-        } else {
-            scrollAction()
-        }
-    }
-
     private func reportPaneReady(_ pane: SettingsPane) {
         DispatchQueue.main.async {
             onPaneAppear(pane)
@@ -615,15 +547,15 @@ struct PreferencesView: View {
         buttonTitle: String,
         action: @escaping () -> Void
     ) -> some View {
-        HStack(alignment: .top, spacing: SettingsLayout.columnSpacing) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.title3.weight(.semibold))
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(title)
+                .font(.title3.weight(.semibold))
 
-                Text(description)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text(description)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .layoutPriority(1)
 
             Spacer(minLength: SettingsLayout.columnSpacing)
 
@@ -663,38 +595,27 @@ struct PreferencesView: View {
     }
 
     private var folderActionsTables: some View {
-        VStack(alignment: .leading, spacing: SettingsLayout.sectionSpacing) {
-            ForEach(MappingModifier.allCases, id: \.self) { modifier in
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(modifier.title)
-                        .font(.headline)
-
-                    folderActionsTable(for: modifier)
-                }
-            }
-        }
-    }
-
-    private func folderActionsTable(for modifier: MappingModifier) -> some View {
         settingsTableCard {
             Grid(alignment: .leading, horizontalSpacing: SettingsLayout.tableCellSpacing, verticalSpacing: SettingsLayout.rowSpacing) {
                 GridRow {
-                    tableHeaderCell("Gesture", width: SettingsLayout.folderGestureColumnWidth)
-                    tableHeaderCell("Open With", width: SettingsLayout.folderOpenWithColumnWidth)
-                    tableHeaderCell("Options")
+                    tableHeaderCell("Modifier", width: SettingsLayout.actionModifierColumnWidth)
+                    tableHeaderCell("Click", width: SettingsLayout.actionColumnWidth)
+                    tableHeaderCell("Scroll Up", width: SettingsLayout.actionColumnWidth)
+                    tableHeaderCell("Scroll Down", width: SettingsLayout.actionColumnWidth)
                 }
 
-                tableDivider(columns: 3)
+                tableDivider(columns: 4)
 
-                ForEach(Array(MappingSource.allCases.enumerated()), id: \.element) { index, source in
-                    GridRow(alignment: .top) {
-                        tableSecondaryCell(folderTriggerTitle(for: source), width: SettingsLayout.folderGestureColumnWidth)
-                        folderOpenWithCell(source: source, modifier: modifier)
-                        folderOptionsCell(source: source, modifier: modifier)
+                ForEach(Array(MappingModifier.allCases.enumerated()), id: \.element) { index, modifier in
+                    GridRow(alignment: .center) {
+                        tableLeadingCell(modifier.title, width: SettingsLayout.actionModifierColumnWidth)
+                        folderActionCell(source: .click, modifier: modifier)
+                        folderActionCell(source: .scrollUp, modifier: modifier)
+                        folderActionCell(source: .scrollDown, modifier: modifier)
                     }
 
-                    if index < MappingSource.allCases.count - 1 {
-                        tableDivider(columns: 3)
+                    if index < MappingModifier.allCases.count - 1 {
+                        tableDivider(columns: 4)
                     }
                 }
             }
@@ -708,14 +629,6 @@ struct PreferencesView: View {
             content()
         }
         .padding(SettingsLayout.tableCardPadding)
-        .background(
-            RoundedRectangle(cornerRadius: SettingsLayout.tableCornerRadius, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: SettingsLayout.tableCornerRadius, style: .continuous)
-                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
-        )
     }
 
     private func tableHeaderCell(_ title: String, width: CGFloat? = nil) -> some View {
@@ -732,12 +645,6 @@ struct PreferencesView: View {
             .foregroundStyle(title.isEmpty ? .clear : .primary)
             .frame(width: width, alignment: .leading)
             .accessibilityHidden(title.isEmpty)
-    }
-
-    private func tableSecondaryCell(_ title: String, width: CGFloat) -> some View {
-        Text(title)
-            .foregroundStyle(.secondary)
-            .frame(width: width, alignment: .leading)
     }
 
     private func tableDivider(columns: Int) -> some View {
@@ -776,174 +683,16 @@ struct PreferencesView: View {
         .frame(width: SettingsLayout.actionColumnWidth, alignment: .leading)
     }
 
-    private func folderOpenWithCell(source: MappingSource, modifier: MappingModifier) -> some View {
+    private func folderActionCell(source: MappingSource, modifier: MappingModifier) -> some View {
         let configuration = folderMappingBinding(source: source, modifier: modifier).wrappedValue
         let options = folderOpenWithOptionsStore.options(including: configuration.openInApplicationIdentifier)
-        return Picker("", selection: folderOpenInBinding(source: source, modifier: modifier)) {
-            ForEach(options) { option in
-                Text(option.displayName).tag(option.identifier)
-            }
-        }
-        .labelsHidden()
-        .pickerStyle(.menu)
-        .frame(width: SettingsLayout.folderOpenWithColumnWidth, alignment: .leading)
-        .disabled(!folderOpenWithOptionsStore.isReady)
-    }
 
-    private func folderOptionsCell(source: MappingSource, modifier: MappingModifier) -> some View {
-        let configuration = folderMappingBinding(source: source, modifier: modifier).wrappedValue
-        let detailFields = folderActionDetailFields(for: configuration)
-
-        return Group {
-            if detailFields.isEmpty {
-                Text("No additional options")
-                    .foregroundStyle(.tertiary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                ViewThatFits(in: .horizontal) {
-                    folderDetailFieldsInlineRow(
-                        fields: detailFields,
-                        source: source,
-                        modifier: modifier
-                    )
-                    .frame(minWidth: SettingsLayout.folderOptionsPreferredWidth, alignment: .leading)
-
-                    VStack(alignment: .leading, spacing: SettingsLayout.rowSpacing) {
-                        ForEach(detailFields, id: \.self) { field in
-                            folderDetailFieldStack(field: field, source: source, modifier: modifier)
-                        }
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func folderDetailFieldsInlineRow(
-        fields: [FolderActionDetailField],
-        source: MappingSource,
-        modifier: MappingModifier
-    ) -> some View {
-        HStack(alignment: .center, spacing: SettingsLayout.tableCellSpacing) {
-            ForEach(fields, id: \.self) { field in
-                HStack(alignment: .center, spacing: SettingsLayout.folderDetailInlineSpacing) {
-                    Text(field.title)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .frame(width: SettingsLayout.folderDetailLabelWidth, alignment: .leading)
-
-                    folderDetailFieldPicker(field: field, source: source, modifier: modifier)
-                        .frame(width: SettingsLayout.folderDetailPickerWidth, alignment: .leading)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func folderActionDetailFields(for configuration: DockFolderAction) -> [FolderActionDetailField] {
-        if configuration.opensInFinder {
-            return [.finderView, .finderGroupBy, .finderSortBy]
-        }
-        return []
-    }
-
-    private func folderDetailFieldStack(
-        field: FolderActionDetailField,
-        source: MappingSource,
-        modifier: MappingModifier
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(field.title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            folderDetailFieldPicker(field: field, source: source, modifier: modifier)
-        }
-        .frame(width: SettingsLayout.folderDetailControlWidth, alignment: .leading)
-    }
-
-    @ViewBuilder
-    private func folderDetailFieldPicker(
-        field: FolderActionDetailField,
-        source: MappingSource,
-        modifier: MappingModifier
-    ) -> some View {
-        let action = folderMappingBinding(source: source, modifier: modifier).wrappedValue
-
-        if action.isFinderPassthrough, field != .finderView {
-            Text("-")
-                .foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            Group {
-                switch field {
-                case .finderView:
-                    Picker("", selection: folderViewBinding(source: source, modifier: modifier)) {
-                        ForEach(DockFolderView.allCases, id: \.self) { option in
-                            Text(option.displayName).tag(option)
-                        }
-                    }
-                case .finderGroupBy:
-                    Picker("", selection: folderGroupByBinding(source: source, modifier: modifier)) {
-                        ForEach(DockFolderGroupBy.allCases, id: \.self) { option in
-                            Text(option.displayName).tag(option)
-                        }
-                    }
-                case .finderSortBy:
-                    Picker("", selection: folderSortByBinding(source: source, modifier: modifier)) {
-                        ForEach(DockFolderSortBy.allCases, id: \.self) { option in
-                            Text(folderSortDisplayName(option, for: action.view)).tag(option)
-                        }
-                    }
-                case .dockSortBy:
-                    Picker("", selection: dockFolderSortByBinding(source: source, modifier: modifier)) {
-                        ForEach(DockFolderStackSortBy.allCases, id: \.self) { option in
-                            Text(option.displayName).tag(option)
-                        }
-                    }
-                case .dockDisplayAs:
-                    Picker("", selection: dockFolderDisplayAsBinding(source: source, modifier: modifier)) {
-                        ForEach(DockFolderStackDisplayAs.allCases, id: \.self) { option in
-                            Text(option.displayName).tag(option)
-                        }
-                    }
-                case .dockViewContentAs:
-                    Picker("", selection: dockFolderViewContentAsBinding(source: source, modifier: modifier)) {
-                        ForEach(DockFolderStackViewContentAs.allCases, id: \.self) { option in
-                            Text(option.displayName).tag(option)
-                        }
-                    }
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-        }
-    }
-
-    private func folderSortDisplayName(_ sortBy: DockFolderSortBy, for view: DockFolderView) -> String {
-        guard sortBy == .none else {
-            return sortBy.displayName
-        }
-
-        switch view {
-        case .icon:
-            return "None"
-        case .automatic, .list, .column:
-            return "System"
-        }
-    }
-
-    private func folderTriggerTitle(for source: MappingSource) -> String {
-        switch source {
-        case .click:
-            return "Click"
-        case .scrollUp:
-            return "Scroll Up"
-        case .scrollDown:
-            return "Scroll Down"
-        }
+        return FullWidthPopUpPicker(
+            options: options.map { PopUpPickerOption(value: $0.identifier, title: $0.displayName) },
+            selection: folderOpenInBinding(source: source, modifier: modifier),
+            isEnabled: folderOpenWithOptionsStore.isReady
+        )
+        .frame(width: SettingsLayout.actionColumnWidth, alignment: .leading)
     }
 
     private func appExposeRequiresMultipleBinding(source: MappingSource, modifier: MappingModifier) -> Binding<Bool> {
@@ -1040,113 +789,10 @@ struct PreferencesView: View {
                 if normalizedIdentifier == DockFolderOpenApplicationCatalog.noneIdentifier {
                     action.wrappedValue = .none
                 } else {
-                    var updated = action.wrappedValue
+                    var updated = DockFolderAction.none
                     updated.openInApplicationIdentifier = normalizedIdentifier
                     action.wrappedValue = updated
                 }
-            }
-        )
-    }
-
-    private func folderViewBinding(source: MappingSource, modifier: MappingModifier) -> Binding<DockFolderView> {
-        let action = folderMappingBinding(source: source, modifier: modifier)
-        return Binding(
-            get: { action.wrappedValue.view },
-            set: { view in
-                var updated = action.wrappedValue
-                if !updated.isConfigured {
-                    updated.openInApplicationIdentifier = DockFolderOpenApplicationCatalog.finderBundleIdentifier
-                }
-                updated.view = view
-                if view == .automatic || view == .column {
-                    updated.sortBy = .none
-                    updated.groupBy = .none
-                }
-                action.wrappedValue = updated
-            }
-        )
-    }
-
-    private func folderGroupByBinding(source: MappingSource, modifier: MappingModifier) -> Binding<DockFolderGroupBy> {
-        let action = folderMappingBinding(source: source, modifier: modifier)
-        return Binding(
-            get: { action.wrappedValue.groupBy },
-            set: { groupBy in
-                var updated = action.wrappedValue
-                if !updated.isConfigured {
-                    updated.openInApplicationIdentifier = DockFolderOpenApplicationCatalog.finderBundleIdentifier
-                }
-                updated.groupBy = groupBy
-                if groupBy != .none {
-                    updated.sortBy = groupBy.defaultSortBy ?? .none
-                    if updated.view == .column {
-                        updated.view = .list
-                    }
-                }
-                action.wrappedValue = updated
-            }
-        )
-    }
-
-    private func folderSortByBinding(source: MappingSource, modifier: MappingModifier) -> Binding<DockFolderSortBy> {
-        let action = folderMappingBinding(source: source, modifier: modifier)
-        return Binding(
-            get: { action.wrappedValue.sortBy },
-            set: { sortBy in
-                var updated = action.wrappedValue
-                if !updated.isConfigured {
-                    updated.openInApplicationIdentifier = DockFolderOpenApplicationCatalog.finderBundleIdentifier
-                }
-                updated.sortBy = sortBy
-                if sortBy != .none && updated.view == .column {
-                    updated.view = .list
-                }
-                action.wrappedValue = updated
-            }
-        )
-    }
-
-    private func dockFolderSortByBinding(source: MappingSource, modifier: MappingModifier) -> Binding<DockFolderStackSortBy> {
-        let action = folderMappingBinding(source: source, modifier: modifier)
-        return Binding(
-            get: { action.wrappedValue.dockSortBy },
-            set: { sortBy in
-                var updated = action.wrappedValue
-                if !updated.isConfigured {
-                    updated.openInApplicationIdentifier = DockFolderOpenApplicationCatalog.dockIdentifier
-                }
-                updated.dockSortBy = sortBy
-                action.wrappedValue = updated
-            }
-        )
-    }
-
-    private func dockFolderDisplayAsBinding(source: MappingSource, modifier: MappingModifier) -> Binding<DockFolderStackDisplayAs> {
-        let action = folderMappingBinding(source: source, modifier: modifier)
-        return Binding(
-            get: { action.wrappedValue.dockDisplayAs },
-            set: { displayAs in
-                var updated = action.wrappedValue
-                if !updated.isConfigured {
-                    updated.openInApplicationIdentifier = DockFolderOpenApplicationCatalog.dockIdentifier
-                }
-                updated.dockDisplayAs = displayAs
-                action.wrappedValue = updated
-            }
-        )
-    }
-
-    private func dockFolderViewContentAsBinding(source: MappingSource, modifier: MappingModifier) -> Binding<DockFolderStackViewContentAs> {
-        let action = folderMappingBinding(source: source, modifier: modifier)
-        return Binding(
-            get: { action.wrappedValue.dockViewContentAs },
-            set: { viewContentAs in
-                var updated = action.wrappedValue
-                if !updated.isConfigured {
-                    updated.openInApplicationIdentifier = DockFolderOpenApplicationCatalog.dockIdentifier
-                }
-                updated.dockViewContentAs = viewContentAs
-                action.wrappedValue = updated
             }
         )
     }

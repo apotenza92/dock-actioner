@@ -8,13 +8,15 @@ struct SettingsRootView: View {
     @ObservedObject var viewModel: SettingsWindowViewModel
     let onPaneAppear: (SettingsPane) -> Void
     let onPaneSelectionRequest: (SettingsPane) -> Void
+    let onOnboardingContentHeightChange: (CGFloat) -> Void
 
     var body: some View {
         Group {
             if preferences.shouldPresentOnboarding {
                 OnboardingView(
                     coordinator: coordinator,
-                    preferences: preferences
+                    preferences: preferences,
+                    onContentHeightChange: onOnboardingContentHeightChange
                 )
             } else {
                 PreferencesView(
@@ -33,7 +35,6 @@ struct SettingsRootView: View {
 
 struct SharedPermissionsSection: View {
     @ObservedObject var coordinator: DockExposeCoordinator
-    let buttonTitle: String
     let footerText: String?
 
     private let appDisplayName = AppServices.appDisplayName
@@ -44,7 +45,6 @@ struct SharedPermissionsSection: View {
                 permission: .accessibility,
                 granted: coordinator.accessibilityGranted,
                 infoText: "Allows \(appDisplayName) to identify Dock icons and trigger actions.",
-                buttonTitle: buttonTitle,
                 action: { coordinator.requestPermissionFromUser(.accessibility) }
             )
 
@@ -52,7 +52,6 @@ struct SharedPermissionsSection: View {
                 permission: .inputMonitoring,
                 granted: coordinator.inputMonitoringGranted,
                 infoText: "Allows \(appDisplayName) to listen for global click and scroll gestures.",
-                buttonTitle: buttonTitle,
                 action: { coordinator.requestPermissionFromUser(.inputMonitoring) }
             )
 
@@ -70,11 +69,10 @@ struct PermissionStatusRow: View {
     let permission: DockmintPermission
     let granted: Bool
     let infoText: String
-    let buttonTitle: String
     let action: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 8) {
                 Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.circle")
                     .foregroundStyle(granted ? Color.green : Color.orange)
@@ -88,9 +86,11 @@ struct PermissionStatusRow: View {
                     .help(infoText)
             }
 
-            Spacer(minLength: 0)
-
-            Button(buttonTitle, action: action)
+            Button(action: action) {
+                Text("Open \(permission.title) Settings")
+                    .frame(maxWidth: .infinity)
+                    .lineLimit(1)
+            }
                 .buttonStyle(.bordered)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

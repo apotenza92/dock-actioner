@@ -8,6 +8,35 @@ func expect(_ condition: @autoclosure () -> Bool, _ message: String) {
 }
 
 func runDecisionEngineTests() {
+    var continuousScrollGesture = ContinuousScrollGestureState()
+    expect(
+        continuousScrollGesture.disposition(nowUptime: 1, scrollPhase: 1, momentumPhase: 0) == .evaluate,
+        "the first continuous scroll event should be evaluated"
+    )
+    continuousScrollGesture.latch(consume: true)
+    expect(
+        continuousScrollGesture.disposition(nowUptime: 1.01, scrollPhase: 4, momentumPhase: 0) == .returnLatched(true),
+        "subsequent continuous scroll events should return the latched decision"
+    )
+    expect(
+        continuousScrollGesture.disposition(nowUptime: 1.02, scrollPhase: 1, momentumPhase: 0) == .evaluate,
+        "a new continuous gesture should be evaluated"
+    )
+
+    var orphanMomentumGesture = ContinuousScrollGestureState()
+    expect(
+        orphanMomentumGesture.disposition(nowUptime: 1, scrollPhase: 0, momentumPhase: 2) == .passThrough,
+        "orphan continuous momentum should pass through"
+    )
+
+    expect(
+        DockDecisionEngine.shouldReplayConsumedMouseDownForDrag(
+            mouseDownWasConsumed: true,
+            dragThresholdExceeded: true
+        ) == true,
+        "a consumed mouse-down must be replayed when the pointer becomes a drag"
+    )
+
     // isAppExposeInteractionActive
     expect(
         DockDecisionEngine.isAppExposeInteractionActive(
