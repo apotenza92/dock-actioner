@@ -6,8 +6,9 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
-## [v0.4.4]
+## [v0.4.5]
 
+- Kept release app identity overrides separate from package resources so PermissionFlow bundles correctly.
 - Selected Xcode 26.2 for release builds to support PermissionFlow’s Swift 6.2 requirement.
 - Replaced the Settings sidebar with three native toolbar tabs, consistent compact window sizing, and native action tables.
 - Simplified onboarding to one screen with permission status, PermissionFlow guidance, and a short Dock interaction tip.
@@ -15,9 +16,13 @@ All notable changes to this project are documented in this file (stable and beta
 - Improved General's alignment, permission status, keyboard focus, and first-opening placement on the primary display.
 - Moved expensive Dock window queries off the event-tap path, improved native click fallback, and added responsiveness diagnostics and regression coverage.
 
+## [v0.4.4]
+
+- Release build failed before publication because the app-name override renamed a package resource bundle. Superseded by v0.4.5.
+
 ## [v0.4.3]
 
-- Release build failed before publication because the hosted Xcode version could not build PermissionFlow. Superseded by v0.4.4.
+- Release build failed before publication because the hosted Xcode version could not build PermissionFlow. Superseded by v0.4.5.
 
 ## [v0.4.2]
 
