@@ -29,6 +29,12 @@ jobs:
           path: signed-appcasts
           run-id: ${{ inputs.source_run }}
           github-token: ${{ github.token }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: reviewed-draft-inputs
+          path: candidate-assets
+          run-id: ${{ inputs.source_run }}
+          github-token: ${{ github.token }}
       - name: Download signed packages
         env:
           GH_TOKEN: ${{ github.token }}
@@ -37,7 +43,7 @@ jobs:
           set -euo pipefail
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           mkdir packages
-          gh release download "$TAG" --pattern "Dockmint-$TAG-macos-arm64.zip" --dir packages
+          cp "candidate-assets/Dockmint-$TAG-macos-arm64.zip" packages/
           previous_url="$(python3 - <<'PY'
           import urllib.request, xml.etree.ElementTree as ET
           with urllib.request.urlopen('https://raw.githubusercontent.com/apotenza92/dockmint/main/appcasts/stable-arm64.xml') as response:
