@@ -62,6 +62,8 @@ jobs:
 
   build-macos:
     needs: prepare
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
     environment: release-signing
     permissions:
       contents: read
@@ -707,7 +709,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          casks="$(find publication/Casks -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort | paste -sd ' ' -)"
+          casks="$(find reviewed-casks -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort | paste -sd ' ' -)"
           [[ "$casks" == 'dockmint.rb dockmint@beta.rb' ]]
           gh release view "$TAG" --json assets > release-assets.json
           channel=stable

@@ -78,7 +78,11 @@ else
   ./scripts/run_decision_engine_tests.sh
   xcodebuild -project Dockmint.xcodeproj -scheme Dockmint -configuration Debug -destination 'platform=macOS' test
   xcodebuild -project Dockmint.xcodeproj -scheme Dockmint -configuration Debug build
-  ./scripts/automated_settings_shell_checks.sh
+  if [[ "${DOCKMINT_RUN_LOCAL_UI_CHECKS:-0}" == "1" ]]; then
+    ./scripts/run_all_checks.sh
+  else
+    echo "Skipping local UI checks: these alter Dock state and require explicit opt-in."
+  fi
 fi
 
 git tag "$TAG"
