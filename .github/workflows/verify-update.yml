@@ -1,0 +1,69 @@
+name: Verify existing signed update
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Candidate release tag
+        required: true
+        default: v0.4.5
+      source_run:
+        description: Release run containing signed-appcasts
+        required: true
+        default: '33843326809'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: signed-appcasts
+          path: signed-appcasts
+          run-id: ${{ inputs.source_run }}
+          github-token: ${{ github.token }}
+      - name: Download signed packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          mkdir packages
+          gh release download "$TAG" --pattern "Dockmint-$TAG-macos-arm64.zip" --dir packages
+          previous_url="$(python3 - <<'PY'
+          import urllib.request, xml.etree.ElementTree as ET
+          with urllib.request.urlopen('https://raw.githubusercontent.com/apotenza92/dockmint/main/appcasts/stable-arm64.xml') as response:
+              print(ET.fromstring(response.read()).find('./channel/item/enclosure').get('url'))
+          PY
+          )"
+          curl --fail --location "$previous_url" --output packages/previous.zip
+      - name: Verify actual install and relaunch
+        env:
+          TAG: ${{ inputs.tag }}
+          IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+          TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          CANDIDATE_CERTIFICATE: ${{ vars.APPLE_SIGNING_CERTIFICATE_SHA256 }}
+          PRIOR_CERTIFICATE: ${{ vars.APPLE_PRIOR_SIGNING_CERTIFICATE_SHA256 }}
+        run: |
+          python3 scripts/release/run_sparkle_update_gate.py \
+            --previous-zip packages/previous.zip \
+            --candidate-zip "packages/Dockmint-$TAG-macos-arm64.zip" \
+            --candidate-appcast signed-appcasts/stable-arm64.xml \
+            --channel stable --arch arm64 --expected-version "${TAG#v}" \
+            --identity "$IDENTITY" --team-id "$TEAM_ID" \
+            --candidate-certificate-sha256 "$CANDIDATE_CERTIFICATE" \
+            --prior-certificate-sha256 "$PRIOR_CERTIFICATE"
+      - name: Retain updater diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sparkle-gate-diagnostics
+          path: sparkle-gate-diagnostics

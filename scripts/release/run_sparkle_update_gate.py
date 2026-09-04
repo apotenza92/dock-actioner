@@ -260,6 +260,8 @@ def run_real_gate(
     team_id: str,
     candidate_certificate_sha256: str,
 ) -> None:
+    diagnostics = Path("sparkle-gate-diagnostics")
+    diagnostics.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="dockmint-sparkle-n-minus-one-") as raw:
         root = Path(raw)
         installed = root / "Applications"
@@ -305,11 +307,12 @@ def run_real_gate(
                     "DOCKMINT_SPARKLE_TEST_EXPECTED_VERSION": expected_version,
                     "DOCKMINT_SPARKLE_TEST_RESULT": str(result_path),
                 }
+                app_output = (diagnostics / "app.log").open("w")
                 process = subprocess.Popen(
                     (str(executable), "-ApplePersistenceIgnoreState", "YES"),
                     env=environment,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
+                    stdout=app_output,
+                    stderr=subprocess.STDOUT,
                 )
                 deadline = time.monotonic() + 240
                 try:
@@ -324,6 +327,23 @@ def run_real_gate(
                             process.wait(timeout=5)
                         except subprocess.TimeoutExpired:
                             process.kill()
+                            process.wait(timeout=5)
+                    app_output.close()
+                    (diagnostics / "result.json").write_text(json.dumps({
+                        "exitCode": process.returncode,
+                        "installedVersion": app_version(previous_app) if previous_app.exists() else None,
+                        "expectedVersion": expected_version,
+                        "result": result_path.read_text() if result_path.exists() else None,
+                    }, indent=2))
+                    logs = subprocess.run(
+                        ("/usr/bin/log", "show", "--last", "6m", "--style", "compact",
+                         "--predicate", 'process CONTAINS "Dockmint" OR process CONTAINS "Updater" OR subsystem CONTAINS "sparkle"'),
+                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30,
+                    )
+                    (diagnostics / "system.log").write_bytes(logs.stdout)
+                    if not result_path.exists():
+                        print((diagnostics / "app.log").read_text(errors="replace")[-16000:])
+                        print((diagnostics / "result.json").read_text())
         finally:
             relaunch_configuration.unlink(missing_ok=True)
 
