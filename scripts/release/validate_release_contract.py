@@ -53,7 +53,8 @@ def validate_project(tag: str) -> None:
     required = (
         "ENABLE_HARDENED_RUNTIME = YES;",
         "ENABLE_APP_SANDBOX = NO;",
-        "PRODUCT_BUNDLE_IDENTIFIER = pzc.Dockmint;",
+        "DOCKMINT_BUNDLE_IDENTIFIER = pzc.Dockmint;",
+        'PRODUCT_BUNDLE_IDENTIFIER = "$(DOCKMINT_BUNDLE_IDENTIFIER)";',
     )
     for token in required:
         if token not in project:
