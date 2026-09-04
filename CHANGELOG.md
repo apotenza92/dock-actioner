@@ -6,8 +6,10 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
-## [v0.4.5]
+## [v0.4.6]
 
+- Fixed updater verification after macOS resolves a temporary bundle path during relaunch, and retained diagnostics for future failures.
+- Corrected Homebrew publication dispatch to use the tap’s Actions-only workflow.
 - Kept release app identity overrides separate from package resources so PermissionFlow bundles correctly.
 - Selected Xcode 26.2 for release builds to support PermissionFlow’s Swift 6.2 requirement.
 - Replaced the Settings sidebar with three native toolbar tabs, consistent compact window sizing, and native action tables.
@@ -15,6 +17,10 @@ All notable changes to this project are documented in this file (stable and beta
 - Kept setup incomplete across permission restarts until Get Started is clicked, with an optional Settings shortcut that defaults off.
 - Improved General's alignment, permission status, keyboard focus, and first-opening placement on the primary display.
 - Moved expensive Dock window queries off the event-tap path, improved native click fallback, and added responsiveness diagnostics and regression coverage.
+
+## [v0.4.5]
+
+- Signed packages built successfully, but publication was blocked by a false-negative update relaunch check. Superseded by v0.4.6.
 
 ## [v0.4.4]
 
