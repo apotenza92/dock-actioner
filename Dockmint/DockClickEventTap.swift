@@ -23,8 +23,13 @@ final class DockClickEventTap {
     private var anyEventHandler: ((CGEventType) -> Void)?
     private var syntheticReleaseHandler: (() -> Void)?
     private var tapTimeoutHandler: (() -> Void)?
+    private let performanceTelemetry = EventTapPerformanceTelemetry()
 
     private(set) var lastStartError: String?
+
+    var performanceSnapshot: EventTapPerformanceSnapshot {
+        performanceTelemetry.snapshot()
+    }
 
     private var continuousScrollGesture = ContinuousScrollGestureState()
     private var leftMouseDownPoint: CGPoint?
@@ -63,6 +68,7 @@ final class DockClickEventTap {
         self.syntheticReleaseHandler = syntheticReleaseHandler
         self.tapTimeoutHandler = tapTimeoutHandler
         self.lastStartError = nil
+        performanceTelemetry.reset()
 
         // Capture both mouse clicks and scroll wheel events
         let clickDownMask = (1 << CGEventType.leftMouseDown.rawValue)
@@ -78,12 +84,22 @@ final class DockClickEventTap {
                                           eventsOfInterest: CGEventMask(mask),
                                           callback: { _, type, event, refcon in
                                               let coordinator = Unmanaged<DockClickEventTap>.fromOpaque(refcon!).takeUnretainedValue()
+                                              let handlerStartedAt = ProcessInfo.processInfo.systemUptime
+                                              defer {
+                                                  let duration = ProcessInfo.processInfo.systemUptime - handlerStartedAt
+                                                  coordinator.performanceTelemetry.recordHandlerDuration(duration)
+                                                  if duration >= 0.01 {
+                                                      let snapshot = coordinator.performanceTelemetry.snapshot()
+                                                      Logger.debug("EVENT_TAP_PERF: type=\(type.rawValue) durationMs=\(Int(duration * 1_000)) events=\(snapshot.eventCount) over10ms=\(snapshot.eventsOver10Milliseconds) over50ms=\(snapshot.eventsOver50Milliseconds) maxMs=\(Int(snapshot.maximumDurationMilliseconds)) timeouts=\(snapshot.timeoutCount)")
+                                                  }
+                                              }
 
                                               coordinator.anyEventHandler?(type)
                                                
                                               var shouldConsume = false
                                               switch type {
                                               case .tapDisabledByTimeout:
+                                                  coordinator.performanceTelemetry.recordTimeout()
                                                   Logger.log("DockClickEventTap: Tap disabled by timeout; resetting state, enabling pass-through cooldown, and re-enabling tap.")
                                                   coordinator.recoverAfterTapTimeout()
                                                   if let tapPort = coordinator.eventTap {

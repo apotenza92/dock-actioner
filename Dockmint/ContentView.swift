@@ -2,35 +2,22 @@ import AppKit
 import Combine
 import SwiftUI
 
-private enum SettingsLayout {
-    static let windowPadding: CGFloat = 14
-    static let sidebarWidth: CGFloat = 156
-    static let tableCardPadding: CGFloat = 14
-    static let pickerWidth: CGFloat = 172
-    static let paneHeaderSpacing: CGFloat = 12
-    static let rowSpacing: CGFloat = 10
-    static let columnSpacing: CGFloat = 14
-    static let formRowSpacing: CGFloat = 8
-    static let tableCellSpacing: CGFloat = 12
-    static let actionModifierColumnWidth: CGFloat = 144
-    static let actionColumnWidth: CGFloat = 172
-    static let appActionsCardWidth: CGFloat =
-        actionModifierColumnWidth +
-        (actionColumnWidth * 3) +
-        (tableCellSpacing * 3) +
-        (tableCardPadding * 2)
-    static let windowContentWidth: CGFloat = appActionsCardWidth
-    static let generalColumnWidth: CGFloat = 236
-    static let updatesColumnWidth: CGFloat = 240
-    static let permissionsColumnWidth: CGFloat =
-        windowContentWidth - generalColumnWidth - updatesColumnWidth - (columnSpacing * 2)
-    static let generalContentWidth: CGFloat = windowContentWidth
-}
-
 enum SettingsPane: String, CaseIterable, Identifiable {
     case general
     case appActions
     case folderActions
+    case permissions
+    case updates
+    case about
+
+    static let tabs: [Self] = [.general, .appActions, .folderActions]
+
+    var destination: Self {
+        switch self {
+        case .permissions, .updates, .about: return .general
+        default: return self
+        }
+    }
 
     var id: String { rawValue }
 
@@ -42,6 +29,23 @@ enum SettingsPane: String, CaseIterable, Identifiable {
             return "App Actions"
         case .folderActions:
             return "Folder Actions"
+        case .permissions:
+            return "Permissions"
+        case .updates:
+            return "Updates"
+        case .about:
+            return "About & Updates"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .general: return "gearshape"
+        case .appActions: return "macwindow.on.rectangle"
+        case .folderActions: return "folder"
+        case .permissions: return "hand.raised"
+        case .updates: return "arrow.triangle.2.circlepath"
+        case .about: return "info.circle"
         }
     }
 
@@ -50,65 +54,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 @MainActor
 final class SettingsWindowViewModel: ObservableObject {
     @Published var selectedPane: SettingsPane = .general
-}
-
-private struct PopUpPickerOption<Value: Hashable> {
-    let value: Value
-    let title: String
-}
-
-private struct FullWidthPopUpPicker<Value: Hashable>: NSViewRepresentable {
-    let options: [PopUpPickerOption<Value>]
-    @Binding var selection: Value
-    let isEnabled: Bool
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(selection: $selection)
-    }
-
-    func makeNSView(context: Context) -> NSPopUpButton {
-        let button = NSPopUpButton(frame: .zero, pullsDown: false)
-        button.bezelStyle = .rounded
-        button.target = context.coordinator
-        button.action = #selector(Coordinator.selectionChanged(_:))
-        button.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        button.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        return button
-    }
-
-    func updateNSView(_ button: NSPopUpButton, context: Context) {
-        context.coordinator.selection = $selection
-
-        let currentTitles = button.itemTitles
-        let expectedTitles = options.map(\.title)
-        if currentTitles != expectedTitles {
-            button.removeAllItems()
-            for option in options {
-                button.addItem(withTitle: option.title)
-            }
-        }
-
-        context.coordinator.options = options.map(\.value)
-        if let selectedIndex = options.firstIndex(where: { $0.value == selection }) {
-            button.selectItem(at: selectedIndex)
-        }
-        button.isEnabled = isEnabled
-    }
-
-    final class Coordinator: NSObject {
-        var selection: Binding<Value>
-        var options: [Value] = []
-
-        init(selection: Binding<Value>) {
-            self.selection = selection
-        }
-
-        @objc func selectionChanged(_ sender: NSPopUpButton) {
-            let index = sender.indexOfSelectedItem
-            guard options.indices.contains(index) else { return }
-            selection.wrappedValue = options[index]
-        }
-    }
+    @Published var generalFocusRequest = 0
 }
 
 struct PreferencesView: View {
@@ -118,17 +64,10 @@ struct PreferencesView: View {
     @ObservedObject var folderOpenWithOptionsStore: FolderOpenWithOptionsStore
     @ObservedObject var viewModel: SettingsWindowViewModel
     let onPaneAppear: (SettingsPane) -> Void
-    let onPaneSelectionRequest: (SettingsPane) -> Void
+
+    @FocusState private var menuBarIconFocused: Bool
 
     private let appDisplayName = AppServices.appDisplayName
-    private var loginItemAvailable: Bool {
-        AppIdentity.supportsLoginItem
-    }
-
-    private var updatesAvailable: Bool {
-        AppIdentity.supportsUpdates
-    }
-
     private var suggestedMouseScrollTool: MouseScrollDirectionTool? {
         MouseScrollDirectionToolDetector.detectedTools().first { tool in
             preferences.shouldSuggestReverseMouseScrollAfterOnboarding(for: tool)
@@ -163,7 +102,8 @@ struct PreferencesView: View {
         }
     }
 
-    private enum MappingModifier: CaseIterable, Hashable {
+    private enum MappingModifier: CaseIterable, Hashable, Identifiable {
+        var id: Self { self }
         case none
         case shift
         case option
@@ -276,391 +216,199 @@ struct PreferencesView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
-            List(SettingsPane.allCases, selection: paneSelection) { pane in
-                Text(pane.title)
-                    .tag(pane)
-                    .accessibilityIdentifier("settings-sidebar-\(pane.rawValue)")
+        selectedPane
+            .id(viewModel.selectedPane.destination)
+            .onAppear { reportPaneReady(viewModel.selectedPane.destination) }
+            .onChange(of: viewModel.selectedPane) { _, pane in reportPaneReady(pane.destination) }
+            .onChange(of: viewModel.generalFocusRequest) {
+                menuBarIconFocused = viewModel.selectedPane.destination == .general
             }
-            .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(
-                min: SettingsLayout.sidebarWidth,
-                ideal: SettingsLayout.sidebarWidth,
-                max: SettingsLayout.sidebarWidth
-            )
-        } detail: {
-            selectedPane
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
-        .navigationSplitViewStyle(.balanced)
-        .onAppear {
-            reportPaneReady(viewModel.selectedPane)
-        }
-        .onChange(of: viewModel.selectedPane) { pane in
-            reportPaneReady(pane)
-        }
-    }
-
-    private var paneSelection: Binding<SettingsPane?> {
-        Binding(
-            get: { viewModel.selectedPane },
-            set: { pane in
-                guard let pane else { return }
-                onPaneSelectionRequest(pane)
-            }
-        )
     }
 
     @ViewBuilder
     private var selectedPane: some View {
-        switch viewModel.selectedPane {
-        case .general:
-            generalPane
+        switch viewModel.selectedPane.destination {
         case .appActions:
             appActionsPane
         case .folderActions:
             folderActionsPane
+        default:
+            generalPane
         }
     }
 
     private var generalPane: some View {
-        generalOverviewSection
-            .frame(width: SettingsLayout.generalContentWidth, alignment: .topLeading)
-            .accessibilityIdentifier("settings-section-general")
-            .accessibilityLabel("General Section")
-            .frame(width: SettingsLayout.windowContentWidth, alignment: .topLeading)
-            .padding(SettingsLayout.windowPadding)
-    }
-
-    private var generalOverviewSection: some View {
-        HStack(alignment: .top, spacing: SettingsLayout.columnSpacing) {
-            generalSettingsGroup
-                .frame(width: SettingsLayout.generalColumnWidth, alignment: .topLeading)
-
-            updatesSettingsGroup
-                .frame(width: SettingsLayout.updatesColumnWidth, alignment: .topLeading)
-
-            permissionsSettingsGroup
-                .frame(width: SettingsLayout.permissionsColumnWidth, alignment: .topLeading)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var generalSettingsGroup: some View {
-        SettingsGroup(title: "General") {
-            VStack(alignment: .leading, spacing: 10) {
-                Toggle("Show menu bar icon", isOn: $preferences.showMenuBarIcon)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .center, spacing: 8) {
-                        Toggle("Reverse mouse scroll direction", isOn: $preferences.reverseMouseScrollActions)
-
-                        Image(systemName: "info.circle")
-                            .foregroundStyle(.secondary)
-                            .help("Enable this if mouse-only scroll tools such as LinearMouse, Mos, or UnnaturalScrollWheels make Dockmint's Scroll Up and Scroll Down actions backwards. Trackpad and other continuous scrolling gestures keep following macOS behavior.")
-                    }
-
-                    if let tool = suggestedMouseScrollTool {
-                        mouseScrollToolSuggestion(for: tool)
-                    }
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 24) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Behavior").foregroundStyle(.secondary)
+                    Toggle("Show menu bar icon", isOn: $preferences.showMenuBarIcon)
+                        .focused($menuBarIconFocused)
+                    Toggle("Open at login", isOn: $preferences.startAtLogin)
+                        .disabled(!AppIdentity.supportsLoginItem)
+                    Toggle("Reverse mouse scrolling", isOn: $preferences.reverseMouseScrollActions)
+                        .help(mouseScrollHelp)
+                    Toggle("Save diagnostic logs", isOn: $preferences.persistentDiagnosticFileLoggingEnabled)
+                        .help("Save logs to help troubleshoot problems.")
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                if loginItemAvailable {
-                    Toggle("Start \(appDisplayName) at login", isOn: $preferences.startAtLogin)
-                } else if !AppIdentity.isDevelopmentIdentity {
-                    Text("Start at Login unavailable")
-                        .font(.body.weight(.medium))
-                }
-
-                Toggle(
-                    "Save diagnostic logs",
-                    isOn: $preferences.persistentDiagnosticFileLoggingEnabled
-                )
-
-                HStack(spacing: 8) {
-                    applicationButtons
-                }
-                .padding(.top, 4)
-            }
-        }
-    }
-
-    private func mouseScrollToolSuggestion(for tool: MouseScrollDirectionTool) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Detected \(tool.displayName). If you use it or a similar app to reverse your mouse's scrolling direction, turn this on so Dockmint's Scroll Up and Scroll Down actions match your mouse.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 8) {
-                Button("Turn On") {
-                    preferences.enableReverseMouseScrollActionsFromSuggestion(for: tool)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-
-                Button("Not Now") {
-                    preferences.dismissMouseScrollToolSuggestion(for: tool)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-        }
-    }
-
-    private var updatesSettingsGroup: some View {
-        SettingsGroup(title: "Updates") {
-            VStack(alignment: .leading, spacing: 12) {
-                Button("Check for Updates", action: updateManager.checkForUpdates)
-                    .buttonStyle(.bordered)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!updatesAvailable || !updateManager.canCheckForUpdates)
-
-                Toggle("Enable background update checks", isOn: $preferences.backgroundUpdateChecksEnabled)
-                    .disabled(!updatesAvailable)
-
-                if !updatesAvailable && !AppIdentity.isDevelopmentIdentity {
-                    Text("Update unavailable")
-                        .font(.callout)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Permissions").foregroundStyle(.secondary)
+                    permissionButton(.accessibility, granted: coordinator.accessibilityGranted)
+                    permissionButton(.inputMonitoring, granted: coordinator.inputMonitoringGranted)
+                    Text(permissionStatusText)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                } else if updatesAvailable && preferences.backgroundUpdateChecksEnabled {
-                    HStack(alignment: .center, spacing: SettingsLayout.formRowSpacing) {
-                        Text("Check")
-                            .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                        Picker("", selection: $preferences.updateCheckFrequency) {
-                            ForEach(UpdateCheckFrequency.allCases.filter { $0 != .never }) { frequency in
-                                Text(frequency.displayName).tag(frequency)
-                            }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Updates").foregroundStyle(.secondary)
+                    Toggle("Automatic checks", isOn: $preferences.backgroundUpdateChecksEnabled)
+                        .disabled(!AppIdentity.supportsUpdates)
+                    Picker("Update frequency", selection: $preferences.updateCheckFrequency) {
+                        ForEach(UpdateCheckFrequency.allCases.filter { $0 != .never }) { frequency in
+                            Text(frequency.displayName).tag(frequency)
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: SettingsLayout.pickerWidth, alignment: .leading)
                     }
-                } else if updatesAvailable {
-                    Text("Background checks are off until you opt in. Manual update checks remain available.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(updateManager.currentVersionText)
+                    .labelsHidden()
+                    .disabled(!AppIdentity.supportsUpdates || !preferences.backgroundUpdateChecksEnabled)
+                    Button("Check for Updates", action: updateManager.checkForUpdates)
+                        .disabled(!AppIdentity.supportsUpdates || !updateManager.canCheckForUpdates)
                     if !AppIdentity.isDevelopmentIdentity {
                         Text(updateManager.updateStatusText)
+                            .lineLimit(1)
+                            .help(updateManager.updateStatusText)
                     }
                 }
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Spacer(minLength: 0)
+            Divider()
+            HStack {
+                Text("\(appDisplayName) · \(updateManager.currentVersionText)")
+                Spacer()
+                Button("GitHub", action: openGitHubPage)
+                Button("Restart", action: restartApp)
+                Button("Quit") { NSApp.terminate(nil) }
             }
         }
+        .font(.body)
+        .padding(.horizontal, 20)
+        .padding(.top, 24)
+        .padding(.bottom, 16)
+        .accessibilityIdentifier("settings-section-general")
+        .onAppear { coordinator.refreshPermissionsAfterExternalChange() }
     }
 
-    private var permissionsSettingsGroup: some View {
-        SettingsGroup(title: "Permissions") {
-            SharedPermissionsSection(
-                coordinator: coordinator,
-                footerText: permissionsStatusNote
-            )
+    private var mouseScrollHelp: String {
+        if let tool = suggestedMouseScrollTool {
+            return "Detected \(tool.displayName). Turn this on if it reverses mouse scrolling. Trackpad gestures are unchanged."
+        }
+        return "Reverse Dock actions for the mouse. Trackpad gestures are unchanged."
+    }
+
+    private func permissionButton(_ permission: DockmintPermission, granted: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.circle")
+                .foregroundStyle(granted ? Color.green : Color.secondary)
+                .accessibilityLabel(granted ? "Granted" : "Required")
+            Button(permission.title) { coordinator.requestPermissionFromUser(permission) }
+                .help("Open \(permission.title) in System Settings")
         }
     }
 
-    private var permissionsStatusNote: String? {
-        var missing: [String] = []
-        if !coordinator.accessibilityGranted {
-            missing.append(DockmintPermission.accessibility.title)
+    private var permissionStatusText: String {
+        switch (coordinator.accessibilityGranted, coordinator.inputMonitoringGranted) {
+        case (true, true): return "Both permissions granted."
+        case (false, true): return "\(DockmintPermission.accessibility.title) required."
+        case (true, false): return "Input Monitoring required."
+        case (false, false): return "Both permissions required."
         }
-        if !coordinator.inputMonitoringGranted {
-            missing.append("Input Monitoring")
-        }
-
-        guard !missing.isEmpty else { return nil }
-        return "\(missing.joined(separator: " and ")) permission\(missing.count == 1 ? " is" : "s are") not enabled."
     }
 
     private var appActionsPane: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            paneSectionHeader(
-                title: "App Actions",
-                description: "Choose what happens when you click or scroll on app icons in the Dock.",
-                buttonTitle: "Reset App Actions",
-                action: preferences.resetAppActionsToDefaults
-            )
-
-            appActionsTable
+        VStack(spacing: 0) {
+            Table(MappingModifier.allCases) {
+                TableColumn("Modifier") { modifier in Text(modifier.title) }
+                    .width(SettingsLayout.actionModifierColumnWidth)
+                TableColumn("Click") { modifier in
+                    appActionFirstClickCell(for: modifier)
+                        .accessibilityLabel("\(modifier.title), Click")
+                }
+                .width(SettingsLayout.actionColumnWidth)
+                TableColumn("Scroll Up") { modifier in
+                    appActionCell(actionMenuBinding(source: .scrollUp, modifier: modifier))
+                        .accessibilityLabel("\(modifier.title), Scroll Up")
+                }
+                .width(SettingsLayout.actionColumnWidth)
+                TableColumn("Scroll Down") { modifier in
+                    appActionCell(actionMenuBinding(source: .scrollDown, modifier: modifier))
+                        .accessibilityLabel("\(modifier.title), Scroll Down")
+                }
+                .width(SettingsLayout.actionColumnWidth)
+            }
+            .tableStyle(.automatic)
+            .scrollIndicators(.hidden)
+            HStack {
+                Button("Reset App Actions", action: preferences.resetAppActionsToDefaults)
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
         }
         .accessibilityIdentifier("settings-section-app-actions")
-        .accessibilityLabel("App Actions Section")
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(width: SettingsLayout.windowContentWidth, alignment: .topLeading)
-        .padding(SettingsLayout.windowPadding)
     }
 
     private var folderActionsPane: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            paneSectionHeader(
-                title: "Folder Actions",
-                description: "Choose what happens when you click or scroll on folder stacks in the Dock.",
-                buttonTitle: "Reset Folder Actions",
-                action: preferences.resetFolderActionsToDefaults
-            )
-
-            folderActionsTables
+        VStack(spacing: 0) {
+            Table(MappingModifier.allCases) {
+                TableColumn("Modifier") { modifier in Text(modifier.title) }
+                    .width(SettingsLayout.actionModifierColumnWidth)
+                TableColumn("Click") { modifier in
+                    folderActionCell(source: .click, modifier: modifier)
+                        .accessibilityLabel("\(modifier.title), Click")
+                }
+                .width(SettingsLayout.actionColumnWidth)
+                TableColumn("Scroll Up") { modifier in
+                    folderActionCell(source: .scrollUp, modifier: modifier)
+                        .accessibilityLabel("\(modifier.title), Scroll Up")
+                }
+                .width(SettingsLayout.actionColumnWidth)
+                TableColumn("Scroll Down") { modifier in
+                    folderActionCell(source: .scrollDown, modifier: modifier)
+                        .accessibilityLabel("\(modifier.title), Scroll Down")
+                }
+                .width(SettingsLayout.actionColumnWidth)
+            }
+            .tableStyle(.automatic)
+            .scrollIndicators(.hidden)
+            HStack {
+                Button("Reset Folder Actions", action: preferences.resetFolderActionsToDefaults)
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
         }
         .accessibilityIdentifier("settings-section-folder-actions")
-        .accessibilityLabel("Folder Actions Section")
-        .frame(width: SettingsLayout.windowContentWidth, alignment: .topLeading)
-        .padding(SettingsLayout.windowPadding)
-        .onAppear {
-            folderOpenWithOptionsStore.warmIfNeeded()
-        }
-    }
-
-    private var applicationButtons: some View {
-        Group {
-            Button("Restart", action: restartApp)
-            Button("Quit") { NSApp.terminate(nil) }
-            Button("About", action: showAboutPanel)
-            Button(action: openGitHubPage) {
-                Image("GitHubMark")
-                    .renderingMode(.template)
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: 14, height: 14)
-            }
-            .help("Open \(appDisplayName) on GitHub")
-        }
-        .buttonStyle(.bordered)
+        .onAppear { folderOpenWithOptionsStore.warmIfNeeded() }
     }
 
     private func reportPaneReady(_ pane: SettingsPane) {
-        DispatchQueue.main.async {
-            onPaneAppear(pane)
-        }
+        DispatchQueue.main.async { onPaneAppear(pane) }
     }
 
-    private func paneSectionHeader(
-        title: String,
-        description: String,
-        buttonTitle: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(title)
-                .font(.title3.weight(.semibold))
-
-            Text(description)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .layoutPriority(1)
-
-            Spacer(minLength: SettingsLayout.columnSpacing)
-
-            Button(buttonTitle, action: action)
-                .buttonStyle(.bordered)
-        }
-        .padding(.bottom, SettingsLayout.paneHeaderSpacing)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var appActionsTable: some View {
-        settingsTableCard {
-            Grid(alignment: .leading, horizontalSpacing: SettingsLayout.tableCellSpacing, verticalSpacing: SettingsLayout.rowSpacing) {
-                GridRow {
-                    tableHeaderCell("Modifier", width: SettingsLayout.actionModifierColumnWidth)
-                    tableHeaderCell("Click", width: SettingsLayout.actionColumnWidth)
-                    tableHeaderCell("Scroll Up", width: SettingsLayout.actionColumnWidth)
-                    tableHeaderCell("Scroll Down", width: SettingsLayout.actionColumnWidth)
-                }
-
-                tableDivider(columns: 4)
-
-                ForEach(Array(MappingModifier.allCases.enumerated()), id: \.element) { index, modifier in
-                    GridRow(alignment: .center) {
-                        tableLeadingCell(modifier.title, width: SettingsLayout.actionModifierColumnWidth)
-                        appActionFirstClickCell(for: modifier)
-                        appActionCell(actionMenuBinding(source: .scrollUp, modifier: modifier))
-                        appActionCell(actionMenuBinding(source: .scrollDown, modifier: modifier))
-                    }
-
-                    if index < MappingModifier.allCases.count - 1 {
-                        tableDivider(columns: 4)
-                    }
-                }
-            }
-        }
-    }
-
-    private var folderActionsTables: some View {
-        settingsTableCard {
-            Grid(alignment: .leading, horizontalSpacing: SettingsLayout.tableCellSpacing, verticalSpacing: SettingsLayout.rowSpacing) {
-                GridRow {
-                    tableHeaderCell("Modifier", width: SettingsLayout.actionModifierColumnWidth)
-                    tableHeaderCell("Click", width: SettingsLayout.actionColumnWidth)
-                    tableHeaderCell("Scroll Up", width: SettingsLayout.actionColumnWidth)
-                    tableHeaderCell("Scroll Down", width: SettingsLayout.actionColumnWidth)
-                }
-
-                tableDivider(columns: 4)
-
-                ForEach(Array(MappingModifier.allCases.enumerated()), id: \.element) { index, modifier in
-                    GridRow(alignment: .center) {
-                        tableLeadingCell(modifier.title, width: SettingsLayout.actionModifierColumnWidth)
-                        folderActionCell(source: .click, modifier: modifier)
-                        folderActionCell(source: .scrollUp, modifier: modifier)
-                        folderActionCell(source: .scrollDown, modifier: modifier)
-                    }
-
-                    if index < MappingModifier.allCases.count - 1 {
-                        tableDivider(columns: 4)
-                    }
-                }
-            }
-        }
-    }
-
-    private func settingsTableCard<Content: View>(
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: SettingsLayout.rowSpacing) {
-            content()
-        }
-        .padding(SettingsLayout.tableCardPadding)
-    }
-
-    private func tableHeaderCell(_ title: String, width: CGFloat? = nil) -> some View {
-        Text(title)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .textCase(.uppercase)
-            .frame(width: width, alignment: .leading)
-    }
-
-    private func tableLeadingCell(_ title: String, width: CGFloat) -> some View {
-        Text(title)
-            .font(.body.weight(title.isEmpty ? .regular : .semibold))
-            .foregroundStyle(title.isEmpty ? .clear : .primary)
-            .frame(width: width, alignment: .leading)
-            .accessibilityHidden(title.isEmpty)
-    }
-
-    private func tableDivider(columns: Int) -> some View {
-        Divider()
-            .gridCellColumns(columns)
-    }
     private func appActionFirstClickCell(for modifier: MappingModifier) -> some View {
         Group {
             if modifier == .none {
-                Picker("", selection: firstClickBehaviorMenuBinding()) {
+                Picker("Click", selection: firstClickBehaviorMenuBinding()) {
                     ForEach(FirstClickMenuOption.allCases, id: \.self) { option in
                         Text(option.displayName).tag(option)
                     }
                 }
             } else {
-                Picker("", selection: firstClickActionMenuBinding(for: modifier)) {
+                Picker("Click", selection: firstClickActionMenuBinding(for: modifier)) {
                     ForEach(ActionMenuOption.allCases, id: \.self) { option in
                         Text(option.displayName).tag(option)
                     }
@@ -669,30 +417,29 @@ struct PreferencesView: View {
         }
         .labelsHidden()
         .pickerStyle(.menu)
-        .frame(width: SettingsLayout.actionColumnWidth, alignment: .leading)
     }
 
     private func appActionCell(_ selection: Binding<ActionMenuOption>) -> some View {
-        Picker("", selection: selection) {
+        Picker("Action", selection: selection) {
             ForEach(ActionMenuOption.allCases, id: \.self) { option in
                 Text(option.displayName).tag(option)
             }
         }
         .labelsHidden()
         .pickerStyle(.menu)
-        .frame(width: SettingsLayout.actionColumnWidth, alignment: .leading)
     }
 
     private func folderActionCell(source: MappingSource, modifier: MappingModifier) -> some View {
         let configuration = folderMappingBinding(source: source, modifier: modifier).wrappedValue
         let options = folderOpenWithOptionsStore.options(including: configuration.openInApplicationIdentifier)
-
-        return FullWidthPopUpPicker(
-            options: options.map { PopUpPickerOption(value: $0.identifier, title: $0.displayName) },
-            selection: folderOpenInBinding(source: source, modifier: modifier),
-            isEnabled: folderOpenWithOptionsStore.isReady
-        )
-        .frame(width: SettingsLayout.actionColumnWidth, alignment: .leading)
+        return Picker(source.title, selection: folderOpenInBinding(source: source, modifier: modifier)) {
+            ForEach(options, id: \.identifier) { option in
+                Text(option.displayName).tag(option.identifier)
+            }
+        }
+        .labelsHidden()
+        .pickerStyle(.menu)
+        .disabled(!folderOpenWithOptionsStore.isReady)
     }
 
     private func appExposeRequiresMultipleBinding(source: MappingSource, modifier: MappingModifier) -> Binding<Bool> {
@@ -883,34 +630,9 @@ struct PreferencesView: View {
         }
     }
 
-    private func showAboutPanel() {
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.orderFrontStandardAboutPanel(nil)
-    }
-
     private func openGitHubPage() {
         guard let url = URL(string: "https://github.com/apotenza92/dockmint") else { return }
         NSWorkspace.shared.open(url)
-    }
-}
-
-private struct SettingsGroup<Content: View>: View {
-    let title: String
-    let content: Content
-
-    init(title: String, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.title3.weight(.semibold))
-
-            content
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
     }
 }
 
@@ -921,7 +643,6 @@ private struct SettingsGroup<Content: View>: View {
         preferences: AppServices.live.preferences,
         folderOpenWithOptionsStore: AppServices.live.folderOpenWithOptionsStore,
         viewModel: SettingsWindowViewModel(),
-        onPaneAppear: { _ in },
-        onPaneSelectionRequest: { _ in }
+        onPaneAppear: { _ in }
     )
 }

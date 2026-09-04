@@ -6,6 +6,14 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
+## [v0.4.3]
+
+- Replaced the Settings sidebar with three native toolbar tabs, consistent compact window sizing, and native action tables.
+- Simplified onboarding to one screen with permission status, PermissionFlow guidance, and a short Dock interaction tip.
+- Kept setup incomplete across permission restarts until Get Started is clicked, with an optional Settings shortcut that defaults off.
+- Improved General's alignment, permission status, keyboard focus, and first-opening placement on the primary display.
+- Moved expensive Dock window queries off the event-tap path, improved native click fallback, and added responsiveness diagnostics and regression coverage.
+
 ## [v0.4.2]
 
 - Restored native Dock icon dragging while Dockmint is running by replaying consumed mouse-down events when a click becomes a drag.

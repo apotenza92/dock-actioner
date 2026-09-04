@@ -26,6 +26,7 @@
 		D7A1C2234F1B4D4A91C4A003 /* Dockmint/Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7A1C2234F1B4D4A91C4A004 /* Dockmint/Logger.swift */; };
 		EDD76B1AD00EEC6FF14F9306 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E1C3D7B1DBCB2A02A51BAF57 /* Cocoa.framework */; };
 		FA12B1D52F00111100DB8333 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = FA12B1D72F00111100DB8333 /* Sparkle */; };
+		A11CE0F10000000000000001 /* PermissionFlow in Frameworks */ = {isa = PBXBuildFile; productRef = A11CE0F10000000000000003 /* PermissionFlow */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -88,6 +89,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FA12B1D52F00111100DB8333 /* Sparkle in Frameworks */,
+				A11CE0F10000000000000001 /* PermissionFlow in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -200,6 +202,7 @@
 			name = Dockmint;
 			packageProductDependencies = (
 				FA12B1D72F00111100DB8333 /* Sparkle */,
+				A11CE0F10000000000000003 /* PermissionFlow */,
 			);
 			productName = Dockmint;
 			productReference = FA12B1922EFF98EC00DB8333 /* Dockmint.app */;
@@ -231,6 +234,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				FA12B1D62F00111100DB8333 /* XCRemoteSwiftPackageReference "Sparkle" */,
+				A11CE0F10000000000000002 /* XCRemoteSwiftPackageReference "PermissionFlow" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = FA12B1932EFF98EC00DB8333 /* Products */;
@@ -473,7 +477,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.4.2;
+				MARKETING_VERSION = 0.4.3;
 				PRODUCT_BUNDLE_IDENTIFIER = pzc.Dockmint.dev;
 				PRODUCT_NAME = "Dockmint Dev";
 				REGISTER_APP_GROUPS = YES;
@@ -508,7 +512,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.4.2;
+				MARKETING_VERSION = 0.4.3;
 				PRODUCT_BUNDLE_IDENTIFIER = pzc.Dockmint;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -563,6 +567,14 @@
 				minimumVersion = 2.6.4;
 			};
 		};
+		A11CE0F10000000000000002 /* XCRemoteSwiftPackageReference "PermissionFlow" */ = {
+            isa = XCRemoteSwiftPackageReference;
+            repositoryURL = "https://github.com/jaywcjlove/PermissionFlow.git";
+            requirement = {
+                kind = exactVersion;
+                version = 2.11.2;
+            };
+        };
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -571,6 +583,11 @@
 			package = FA12B1D62F00111100DB8333 /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
 		};
+		A11CE0F10000000000000003 /* PermissionFlow */ = {
+            isa = XCSwiftPackageProductDependency;
+            package = A11CE0F10000000000000002 /* XCRemoteSwiftPackageReference "PermissionFlow" */;
+            productName = PermissionFlow;
+        };
 /* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = FA12B18A2EFF98EC00DB8333 /* Project object */;

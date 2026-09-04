@@ -383,6 +383,81 @@ final class DockDecisionEngineXCTest: XCTestCase {
         )
     }
 
+    func testDeferredAppExposeKeepsMouseDownAvailableForNativeFallback() {
+        XCTAssertFalse(
+            DockDecisionEngine.shouldConsumePendingMouseDown(
+                consumeClick: true,
+                isDeferredAppExposeWindowCount: true,
+                shouldFinishModifierClickEarly: false
+            )
+        )
+
+        XCTAssertTrue(
+            DockDecisionEngine.shouldConsumePendingMouseDown(
+                consumeClick: true,
+                isDeferredAppExposeWindowCount: false,
+                shouldFinishModifierClickEarly: false
+            )
+        )
+    }
+
+    func testDeferredAppExposeFailsOpenWhenWindowCountIsNotReady() {
+        XCTAssertNil(
+            DockDecisionEngine.shouldRunDeferredAppExpose(
+                cachedWindowCount: nil,
+                requiresMultipleWindows: true
+            )
+        )
+        XCTAssertEqual(
+            DockDecisionEngine.shouldRunDeferredAppExpose(
+                cachedWindowCount: 1,
+                requiresMultipleWindows: true
+            ),
+            false
+        )
+        XCTAssertEqual(
+            DockDecisionEngine.shouldRunDeferredAppExpose(
+                cachedWindowCount: 2,
+                requiresMultipleWindows: true
+            ),
+            true
+        )
+    }
+
+    func testVisibleWindowStateIsResolvedOnlyWhenRequested() {
+        var queryCount = 0
+        let cached = DockDecisionEngine.resolveVisibleWindowState(cachedValue: true) {
+            queryCount += 1
+            return false
+        }
+        XCTAssertTrue(cached)
+        XCTAssertEqual(queryCount, 0)
+
+        let resolved = DockDecisionEngine.resolveVisibleWindowState(cachedValue: nil) {
+            queryCount += 1
+            return false
+        }
+        XCTAssertFalse(resolved)
+        XCTAssertEqual(queryCount, 1)
+    }
+
+    func testDockTargetCanBeReusedForStationaryMouseUp() {
+        XCTAssertTrue(
+            DockDecisionEngine.canReuseMouseDownDockTarget(
+                mouseDown: CGPoint(x: 100, y: 200),
+                mouseUp: CGPoint(x: 103, y: 204),
+                movementThreshold: 6
+            )
+        )
+        XCTAssertFalse(
+            DockDecisionEngine.canReuseMouseDownDockTarget(
+                mouseDown: CGPoint(x: 100, y: 200),
+                mouseUp: CGPoint(x: 107, y: 200),
+                movementThreshold: 6
+            )
+        )
+    }
+
     func testEffectiveScrollDeltaCanFlipDiscreteDirectionOnly() {
         XCTAssertEqual(
             DockDecisionEngine.effectiveScrollDelta(
@@ -798,5 +873,95 @@ final class DockDecisionEngineXCTest: XCTestCase {
         XCTAssertNil(
             DockHitTest.classifyDockItem(subrole: nil, url: nil)
         )
+    }
+
+    func testDockHitTestStableMetadataCacheReusesAndInvalidatesValues() {
+        var cache = DockHitTestStableMetadataCache()
+        var displayLoads = 0
+        let point = CGPoint(x: 10, y: 10)
+
+        XCTAssertNotNil(cache.displayBounds(containing: point) {
+            displayLoads += 1
+            return [CGRect(x: 0, y: 0, width: 100, height: 100)]
+        })
+        XCTAssertNotNil(cache.displayBounds(containing: point) {
+            displayLoads += 1
+            return []
+        })
+        XCTAssertEqual(displayLoads, 1)
+
+        cache.invalidateDisplayBounds()
+        XCTAssertNil(cache.displayBounds(containing: point) {
+            displayLoads += 1
+            return []
+        })
+        XCTAssertEqual(displayLoads, 2)
+
+        var dockPIDLoads = 0
+        XCTAssertEqual(cache.dockProcessIdentifier {
+            dockPIDLoads += 1
+            return 42
+        }, 42)
+        XCTAssertEqual(cache.dockProcessIdentifier {
+            dockPIDLoads += 1
+            return 99
+        }, 42)
+        XCTAssertEqual(dockPIDLoads, 1)
+
+        cache.invalidateDockProcessIdentifier()
+        XCTAssertEqual(cache.dockProcessIdentifier {
+            dockPIDLoads += 1
+            return 99
+        }, 99)
+        XCTAssertEqual(dockPIDLoads, 2)
+    }
+
+    func testPersistentLogWriterPreservesOrderedMessagesAcrossReopen() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("dockmint-log-writer-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let logURL = directory.appendingPathComponent("test.log")
+
+        var writer: PersistentLogWriter? = try PersistentLogWriter(url: logURL)
+        try writer?.append(line: "first")
+        try writer?.append(line: "second")
+        try writer?.close()
+        writer = nil
+
+        let reopenedWriter = try PersistentLogWriter(url: logURL)
+        try reopenedWriter.append(line: "third")
+        try reopenedWriter.close()
+
+        XCTAssertEqual(try String(contentsOf: logURL, encoding: .utf8), "first\nsecond\nthird\n")
+    }
+
+    func testEventTapPerformanceTelemetryReportsLatencyAndTimeouts() {
+        let telemetry = EventTapPerformanceTelemetry()
+        telemetry.recordHandlerDuration(0.003)
+        telemetry.recordHandlerDuration(0.012)
+        telemetry.recordHandlerDuration(0.075)
+        telemetry.recordTimeout()
+
+        let snapshot = telemetry.snapshot()
+        XCTAssertEqual(snapshot.eventCount, 3)
+        XCTAssertEqual(snapshot.eventsOver5Milliseconds, 2)
+        XCTAssertEqual(snapshot.eventsOver10Milliseconds, 2)
+        XCTAssertEqual(snapshot.eventsOver50Milliseconds, 1)
+        XCTAssertEqual(snapshot.timeoutCount, 1)
+        XCTAssertEqual(snapshot.maximumDurationMilliseconds, 75, accuracy: 0.001)
+    }
+
+    func testDeferredScrollActionPreservesPassThroughSemantics() {
+        XCTAssertFalse(DockDecisionEngine.shouldConsumeDeferredScrollAction(action: .none,
+                                                                            isRunning: true))
+        XCTAssertFalse(DockDecisionEngine.shouldConsumeDeferredScrollAction(action: .appExpose,
+                                                                            isRunning: true))
+        XCTAssertFalse(DockDecisionEngine.shouldConsumeDeferredScrollAction(action: .activateApp,
+                                                                            isRunning: false))
+        XCTAssertTrue(DockDecisionEngine.shouldConsumeDeferredScrollAction(action: .activateApp,
+                                                                           isRunning: true))
+        XCTAssertTrue(DockDecisionEngine.shouldConsumeDeferredScrollAction(action: .hideOthers,
+                                                                           isRunning: true))
     }
 }

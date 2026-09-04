@@ -57,6 +57,64 @@ struct ResolvedScrollDelta: Equatable {
     }
 }
 
+struct EventTapPerformanceSnapshot: Equatable {
+    let eventCount: UInt64
+    let eventsOver5Milliseconds: UInt64
+    let eventsOver10Milliseconds: UInt64
+    let eventsOver50Milliseconds: UInt64
+    let timeoutCount: UInt64
+    let maximumDurationMilliseconds: Double
+}
+
+final class EventTapPerformanceTelemetry: @unchecked Sendable {
+    private let lock = NSLock()
+    private var eventCount: UInt64 = 0
+    private var eventsOver5Milliseconds: UInt64 = 0
+    private var eventsOver10Milliseconds: UInt64 = 0
+    private var eventsOver50Milliseconds: UInt64 = 0
+    private var timeoutCount: UInt64 = 0
+    private var maximumDurationMilliseconds: Double = 0
+
+    func recordHandlerDuration(_ duration: TimeInterval) {
+        let milliseconds = duration * 1_000
+        lock.lock()
+        eventCount += 1
+        if milliseconds >= 5 { eventsOver5Milliseconds += 1 }
+        if milliseconds >= 10 { eventsOver10Milliseconds += 1 }
+        if milliseconds >= 50 { eventsOver50Milliseconds += 1 }
+        maximumDurationMilliseconds = max(maximumDurationMilliseconds, milliseconds)
+        lock.unlock()
+    }
+
+    func recordTimeout() {
+        lock.lock()
+        timeoutCount += 1
+        lock.unlock()
+    }
+
+    func snapshot() -> EventTapPerformanceSnapshot {
+        lock.lock()
+        defer { lock.unlock() }
+        return EventTapPerformanceSnapshot(eventCount: eventCount,
+                                           eventsOver5Milliseconds: eventsOver5Milliseconds,
+                                           eventsOver10Milliseconds: eventsOver10Milliseconds,
+                                           eventsOver50Milliseconds: eventsOver50Milliseconds,
+                                           timeoutCount: timeoutCount,
+                                           maximumDurationMilliseconds: maximumDurationMilliseconds)
+    }
+
+    func reset() {
+        lock.lock()
+        eventCount = 0
+        eventsOver5Milliseconds = 0
+        eventsOver10Milliseconds = 0
+        eventsOver50Milliseconds = 0
+        timeoutCount = 0
+        maximumDurationMilliseconds = 0
+        lock.unlock()
+    }
+}
+
 enum ContinuousScrollGestureDisposition: Equatable {
     case evaluate
     case returnLatched(Bool)
@@ -260,6 +318,52 @@ enum DockDecisionEngine {
              .bringAllToFront,
              .hideOthers,
              .singleAppMode:
+            return true
+        }
+    }
+
+    static func shouldConsumePendingMouseDown(consumeClick: Bool,
+                                              isDeferredAppExposeWindowCount: Bool,
+                                              shouldFinishModifierClickEarly: Bool) -> Bool {
+        if isDeferredAppExposeWindowCount {
+            // Window counting completes after mouse-down so the event tap stays responsive.
+            // Keep the real down event available to the Dock: if the resolved count later
+            // fails the App Expose gate, the physical up can pass through as a complete
+            // native click instead of relying on manual activation plus a synthetic release.
+            return false
+        }
+
+        return consumeClick || shouldFinishModifierClickEarly
+    }
+
+    /// Returns nil when the asynchronous window count is not ready. Callers must fail open
+    /// in that case so the physical Dock click retains its native down/up lifecycle.
+    static func shouldRunDeferredAppExpose(cachedWindowCount: Int?,
+                                           requiresMultipleWindows: Bool) -> Bool? {
+        guard let cachedWindowCount else { return nil }
+        return shouldRunFirstClickAppExpose(windowCount: cachedWindowCount,
+                                            requiresMultipleWindows: requiresMultipleWindows)
+    }
+
+    static func resolveVisibleWindowState(cachedValue: Bool?,
+                                          query: () -> Bool) -> Bool {
+        cachedValue ?? query()
+    }
+
+    static func canReuseMouseDownDockTarget(mouseDown: CGPoint,
+                                            mouseUp: CGPoint,
+                                            movementThreshold: CGFloat = 6) -> Bool {
+        hypot(mouseUp.x - mouseDown.x, mouseUp.y - mouseDown.y) < movementThreshold
+    }
+
+    static func shouldConsumeDeferredScrollAction(action: DecisionDockAction,
+                                                  isRunning: Bool) -> Bool {
+        switch action {
+        case .none, .appExpose:
+            return false
+        case .activateApp, .quitApp:
+            return isRunning
+        case .hideApp, .minimizeAll, .bringAllToFront, .hideOthers, .singleAppMode:
             return true
         }
     }

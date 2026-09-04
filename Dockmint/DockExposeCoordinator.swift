@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import ApplicationServices
+import PermissionFlow
 
 enum DockmintPermission: String, CaseIterable, Identifiable {
     case accessibility
@@ -36,6 +37,9 @@ final class DockExposeCoordinator: ObservableObject {
     static let shared = DockExposeCoordinator(preferences: Preferences.shared)
 
     private let eventTap = DockClickEventTap()
+    private lazy var permissionFlow = PermissionFlow.makeController()
+    private let windowActionQueue = DispatchQueue(label: "pzc.Dockmint.windowActions",
+                                                  qos: .userInitiated)
     private let invoker = AppExposeInvoker()
     private let preferences: Preferences
     private var workspaceActivationObserver: NSObjectProtocol?
@@ -60,6 +64,7 @@ final class DockExposeCoordinator: ObservableObject {
     private var appExposeInvocationToken: UUID?
     private var clickRecoveryTokenCounter: UInt64 = 0
     private var clickSequenceCounter: UInt64 = 0
+    private var deferredAppExposePrewarmTokenCounter: UInt64 = 0
     private var folderClickSequenceCounter: UInt64 = 0
     private var activationAssertionTokenCounter: UInt64 = 0
     private var exposeTrackingExpiryTokenCounter: UInt64 = 0
@@ -109,6 +114,10 @@ final class DockExposeCoordinator: ObservableObject {
     @Published private(set) var lastDockBundleHitAt: Date?
     @Published var diagnosticsCaptureActive: Bool = false
 
+    var eventTapPerformanceSnapshot: EventTapPerformanceSnapshot {
+        eventTap.performanceSnapshot
+    }
+
     @Published private(set) var lastActionExecuted: DockAction?
     @Published private(set) var lastActionExecutedBundle: String?
     @Published private(set) var lastActionExecutedSource: String?
@@ -120,7 +129,7 @@ final class DockExposeCoordinator: ObservableObject {
         let isFrontmost: Bool
         let isActive: Bool
         let totalWindowCount: Int
-        let hasVisibleWindows: Bool
+        let hasVisibleWindows: Bool?
 
         var hasNoWindows: Bool { totalWindowCount == 0 }
         var hasMultipleWindows: Bool { totalWindowCount >= 2 }
@@ -159,27 +168,29 @@ final class DockExposeCoordinator: ObservableObject {
                                            frontmostBefore: String?) -> ClickAppStateSnapshot {
         let runningApplication = NSWorkspace.shared.runningApplications.first { $0.bundleIdentifier == bundleIdentifier }
         let isRunning = runningApplication != nil
-        let totalWindowCount = isRunning ? WindowManager.appExposeWindowCount(bundleIdentifier: bundleIdentifier) : 0
-        let hasVisibleWindows = isRunning ? WindowManager.hasVisibleWindows(bundleIdentifier: bundleIdentifier) : false
+        // Never run AppleScript/AX window enumeration inside the event tap. AppleScript
+        // can pump the main run loop and deliver mouse-up before this down is recorded.
+        let totalWindowCount = isRunning
+            ? (WindowManager.appExposeWindowCountDiagnosticsAfterPrewarmIfAvailable(bundleIdentifier: bundleIdentifier)?.finalCount ?? 0)
+            : 0
         return ClickAppStateSnapshot(bundleIdentifier: bundleIdentifier,
                                      isRunning: isRunning,
                                      isFrontmost: frontmostBefore == bundleIdentifier,
                                      isActive: runningApplication?.isActive ?? false,
                                      totalWindowCount: totalWindowCount,
-                                     hasVisibleWindows: hasVisibleWindows)
+                                     hasVisibleWindows: isRunning ? nil : false)
     }
 
     private func makeOptimisticAppExposeClickAppStateSnapshot(bundleIdentifier: String,
                                                               frontmostBefore: String?) -> ClickAppStateSnapshot {
         let runningApplication = NSWorkspace.shared.runningApplications.first { $0.bundleIdentifier == bundleIdentifier }
         let isRunning = runningApplication != nil
-        let hasVisibleWindows = isRunning ? WindowManager.hasVisibleWindows(bundleIdentifier: bundleIdentifier) : false
         return ClickAppStateSnapshot(bundleIdentifier: bundleIdentifier,
                                      isRunning: isRunning,
                                      isFrontmost: frontmostBefore == bundleIdentifier,
                                      isActive: runningApplication?.isActive ?? false,
                                      totalWindowCount: isRunning ? 2 : 0,
-                                     hasVisibleWindows: hasVisibleWindows)
+                                     hasVisibleWindows: isRunning ? nil : false)
     }
 
     private func makePendingClickContext(clickSequence: UInt64,
@@ -257,7 +268,9 @@ final class DockExposeCoordinator: ObservableObject {
     private func hasVisibleWindows(bundleIdentifier: String,
                                    appState: ClickAppStateSnapshot? = nil) -> Bool {
         if let appState, appState.bundleIdentifier == bundleIdentifier {
-            return appState.hasVisibleWindows
+            return DockDecisionEngine.resolveVisibleWindowState(cachedValue: appState.hasVisibleWindows) {
+                WindowManager.hasVisibleWindows(bundleIdentifier: bundleIdentifier)
+            }
         }
         return WindowManager.hasVisibleWindows(bundleIdentifier: bundleIdentifier)
     }
@@ -572,9 +585,11 @@ final class DockExposeCoordinator: ObservableObject {
     }
 
     func requestPermissionFromUser(_ permission: DockmintPermission) {
-        openSystemSettings(for: permission)
+        permissionFlow.authorize(
+            pane: permission == .accessibility ? .accessibility : .inputMonitoring
+        )
         refreshPermissionsAndSecurityState()
-        Logger.log("Opened System Settings for permission request: \(permission.title)")
+        Logger.log("Opened PermissionFlow for permission request: \(permission.title)")
         startWhenPermissionAvailable()
     }
 
@@ -650,6 +665,7 @@ final class DockExposeCoordinator: ObservableObject {
 
         switch phase {
         case .down:
+            deferredAppExposePrewarmTokenCounter += 1
             Logger.debug("WORKFLOW: Click down at \(location.x), \(location.y) button \(buttonNumber) clickCount=\(clickCount)")
             let dockTargetAtMouseDown = dockTargetNearPoint(location)
             let folderURLAtMouseDown: URL?
@@ -783,8 +799,21 @@ final class DockExposeCoordinator: ObservableObject {
             let frontmostBefore = FrontmostAppTracker.frontmostBundleIdentifier()
             let deferAppExposeWindowCount = shouldDeferAppExposeWindowCountOnMouseDown(clickedBundle: clickedBundle,
                                                                                        flags: flags)
-            if deferAppExposeWindowCount {
-                WindowManager.prewarmAppExposeWindowCount(bundleIdentifier: clickedBundle)
+            WindowManager.prewarmAppExposeWindowCount(bundleIdentifier: clickedBundle)
+            // Quitting only needs the running process, not its window inventory.
+            // A cold or expired cache must not turn the quit shortcut into activation.
+            let isQuitClick = modifierCombination(from: flags) != .none
+                && firstClickModifierAction(for: modifierCombination(from: flags)) == .quitApp
+            if !deferAppExposeWindowCount,
+               !isQuitClick,
+               NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == clickedBundle }),
+               WindowManager.appExposeWindowCountDiagnosticsAfterPrewarmIfAvailable(bundleIdentifier: clickedBundle) == nil {
+                // Preserve a complete native click while the background query warms up.
+                // In particular, do not publish a pending down after a nested mouse-up.
+                pendingClickContext = nil
+                pendingClickWasDragged = false
+                Logger.debug("WORKFLOW: Passing through click while window state prewarms bundle=\(clickedBundle)")
+                return false
             }
             let appState = deferAppExposeWindowCount
                 ? makeOptimisticAppExposeClickAppStateSnapshot(bundleIdentifier: clickedBundle,
@@ -862,7 +891,13 @@ final class DockExposeCoordinator: ObservableObject {
                     return false
                 }
 
-                let resolvedFolderAtMouseUp = folderURLNearPoint(location) ?? context.folderURL
+                let resolvedFolderAtMouseUp: URL
+                if DockDecisionEngine.canReuseMouseDownDockTarget(mouseDown: context.location,
+                                                                  mouseUp: location) {
+                    resolvedFolderAtMouseUp = context.folderURL
+                } else {
+                    resolvedFolderAtMouseUp = folderURLNearPoint(location) ?? context.folderURL
+                }
                 Logger.debug("WORKFLOW: Folder mouse-up resolution initial=\(context.folderURL.path) resolved=\(resolvedFolderAtMouseUp.path) consumeMouseDown=\(context.consumeMouseDown) consumeMouseUp=\(context.consumeMouseUp)")
                 let effectiveContext = PendingFolderClickContext(clickSequence: context.clickSequence,
                                                                  location: context.location,
@@ -911,7 +946,13 @@ final class DockExposeCoordinator: ObservableObject {
                 return false
             }
 
-            let resolvedBundleAtMouseUp = bundleIdentifierNearPoint(location) ?? context.clickedBundle
+            let resolvedBundleAtMouseUp: String
+            if DockDecisionEngine.canReuseMouseDownDockTarget(mouseDown: context.location,
+                                                              mouseUp: location) {
+                resolvedBundleAtMouseUp = context.clickedBundle
+            } else {
+                resolvedBundleAtMouseUp = bundleIdentifierNearPoint(location) ?? context.clickedBundle
+            }
             let effectiveContext: PendingClickContext
             if resolvedBundleAtMouseUp != context.clickedBundle {
                 Logger.debug("WORKFLOW: Bundle corrected on mouse-up from \(context.clickedBundle) to \(resolvedBundleAtMouseUp)")
@@ -983,10 +1024,11 @@ final class DockExposeCoordinator: ObservableObject {
     }
 
     private func shouldConsumeMouseDown(for context: PendingClickContext) -> Bool {
-        if context.consumeClick {
-            return true
-        }
-        return shouldFinishConsumedModifierClickEarly(for: context)
+        DockDecisionEngine.shouldConsumePendingMouseDown(
+            consumeClick: context.consumeClick,
+            isDeferredAppExposeWindowCount: context.deferredAppExposeWindowCount,
+            shouldFinishModifierClickEarly: shouldFinishConsumedModifierClickEarly(for: context)
+        )
     }
 
     private func shouldScheduleConsumedFollowUpClickWatchdog(for context: PendingClickContext) -> Bool {
@@ -1402,67 +1444,121 @@ final class DockExposeCoordinator: ObservableObject {
         lastActionExecutedSource = source.rawValue
         lastActionExecutedAt = Date()
         Logger.debug("WORKFLOW: Executing scroll \(direction == .up ? "up" : "down") action: \(action.rawValue) for \(clickedBundle) (modifiers=\(modifierCombination(from: flags).rawValue), flags=\(flags.rawValue))")
+        let clickedAppIsRunning = NSWorkspace.shared.runningApplications.contains {
+            $0.bundleIdentifier == clickedBundle
+        }
+        let shouldConsume = DockDecisionEngine.shouldConsumeDeferredScrollAction(
+            action: decisionAction(from: action),
+            isRunning: clickedAppIsRunning
+        )
 
         switch action {
         case .none:
-            return false
+            return shouldConsume
         case .activateApp:
-            return performActivateAppAction(bundleIdentifier: clickedBundle)
+            guard shouldConsume else { return false }
+            resetExposeTracking()
+            windowActionQueue.async {
+                if WindowManager.isAppHidden(bundleIdentifier: clickedBundle) {
+                    _ = WindowManager.unhideApp(bundleIdentifier: clickedBundle)
+                }
+                _ = WindowManager.activateAndShowMainWindow(bundleIdentifier: clickedBundle)
+            }
+            return true
         case .hideApp:
             if shouldThrottleScrollToggle(action: action, bundleIdentifier: clickedBundle, now: now) {
                 Logger.debug("WORKFLOW: Scroll toggle throttle active for \(clickedBundle) action=\(action.rawValue)")
                 return true
             }
             markScrollToggle(action: action, bundleIdentifier: clickedBundle, now: now)
-            return performHideAppToggle(targetBundleIdentifier: clickedBundle)
+            cancelPendingActivationAssertions(reason: "hideAppToggle", bundleIdentifier: clickedBundle)
+            let shouldUnhide = WindowManager.isAppHidden(bundleIdentifier: clickedBundle)
+            if shouldUnhide { lastHideOthersTargetBundle = nil }
+            resetExposeTracking()
+            windowActionQueue.async {
+                if shouldUnhide {
+                    _ = WindowManager.unhideApp(bundleIdentifier: clickedBundle)
+                } else {
+                    _ = WindowManager.hideAllWindows(bundleIdentifier: clickedBundle)
+                }
+            }
+            return shouldConsume
         case .hideOthers:
             if shouldThrottleScrollToggle(action: action, bundleIdentifier: clickedBundle, now: now) {
                 Logger.debug("WORKFLOW: Scroll toggle throttle active for \(clickedBundle) action=\(action.rawValue)")
                 return true
             }
             markScrollToggle(action: action, bundleIdentifier: clickedBundle, now: now)
-            return performHideOthersToggle(targetBundleIdentifier: clickedBundle)
-        case .bringAllToFront:
-            if WindowManager.isAppHidden(bundleIdentifier: clickedBundle) {
-                _ = WindowManager.unhideApp(bundleIdentifier: clickedBundle)
-            }
-            _ = WindowManager.bringAllToFront(bundleIdentifier: clickedBundle)
+            cancelPendingActivationAssertions(reason: "hideOthersToggle", bundleIdentifier: clickedBundle)
+            let shouldUndoHideOthers = lastHideOthersTargetBundle == clickedBundle
+                && WindowManager.anyHiddenOthers(excluding: clickedBundle)
+            lastHideOthersTargetBundle = shouldUndoHideOthers ? nil : clickedBundle
             resetExposeTracking()
-            return true
+            windowActionQueue.async {
+                if shouldUndoHideOthers {
+                    _ = WindowManager.showAllApplications()
+                } else {
+                    _ = WindowManager.hideOthers(bundleIdentifier: clickedBundle)
+                }
+            }
+            return shouldConsume
+        case .bringAllToFront:
+            resetExposeTracking()
+            windowActionQueue.async {
+                if WindowManager.isAppHidden(bundleIdentifier: clickedBundle) {
+                    _ = WindowManager.unhideApp(bundleIdentifier: clickedBundle)
+                }
+                _ = WindowManager.bringAllToFront(bundleIdentifier: clickedBundle)
+            }
+            return shouldConsume
         case .appExpose:
             let scrollModifier = modifierCombination(from: flags)
             let scrollSlot = appExposeSlotKey(for: source, modifier: scrollModifier)
             let scrollRequiresMultiple = preferences.appExposeMultipleWindowsRequired(slot: scrollSlot)
-            if scrollRequiresMultiple {
-                let diagnostics = WindowManager.appExposeWindowCountDiagnostics(bundleIdentifier: clickedBundle)
-                let windowCountNow = diagnostics.finalCount
-                Logger.debug("APP_EXPOSE_DECISION: scroll appExpose count \(diagnostics.summary)")
-                if windowCountNow < 2 {
-                    Logger.debug("APP_EXPOSE_DECISION: scroll appExpose skipped for \(clickedBundle): fewer than two windows")
-                    return false
+            windowActionQueue.async { [weak self] in
+                if scrollRequiresMultiple {
+                    let diagnostics = WindowManager.appExposeWindowCountDiagnostics(bundleIdentifier: clickedBundle)
+                    let windowCountNow = diagnostics.finalCount
+                    Logger.debug("APP_EXPOSE_DECISION: scroll appExpose count \(diagnostics.summary)")
+                    if windowCountNow < 2 {
+                        Logger.debug("APP_EXPOSE_DECISION: scroll appExpose skipped for \(clickedBundle): fewer than two windows")
+                        return
+                    }
+                }
+                DispatchQueue.main.async { [weak self] in
+                    self?.triggerAppExpose(for: clickedBundle)
                 }
             }
-            triggerAppExpose(for: clickedBundle)
             // Keep scroll pass-through for App Exposé trigger path.
-            return false
+            return shouldConsume
         case .singleAppMode:
             if shouldThrottleScrollToggle(action: action, bundleIdentifier: clickedBundle, now: now) {
                 Logger.debug("WORKFLOW: Scroll toggle throttle active for \(clickedBundle) action=\(action.rawValue)")
                 return true
             }
             markScrollToggle(action: action, bundleIdentifier: clickedBundle, now: now)
-            performSingleAppMode(targetBundleIdentifier: clickedBundle, frontmostBefore: frontmostBefore)
-            return true
+            scheduleSingleAppModeFromScroll(targetBundleIdentifier: clickedBundle,
+                                            frontmostBefore: frontmostBefore)
+            return shouldConsume
         case .minimizeAll:
             if shouldThrottleMinimize(bundleIdentifier: clickedBundle) {
                 Logger.debug("WORKFLOW: Minimize throttle active for \(clickedBundle); ignoring scroll")
                 return true
             }
             markMinimize(bundleIdentifier: clickedBundle)
-            performMinimizeToggle(bundleIdentifier: clickedBundle)
-            return true
+            windowActionQueue.async {
+                if WindowManager.restoreAllWindows(bundleIdentifier: clickedBundle) {
+                    _ = WindowManager.activateAndShowMainWindow(bundleIdentifier: clickedBundle)
+                } else {
+                    _ = WindowManager.minimizeAllWindows(bundleIdentifier: clickedBundle)
+                }
+            }
+            return shouldConsume
         case .quitApp:
-            _ = WindowManager.quitApp(bundleIdentifier: clickedBundle)
+            guard shouldConsume else { return false }
+            windowActionQueue.async {
+                _ = WindowManager.quitApp(bundleIdentifier: clickedBundle)
+            }
             return true
         @unknown default:
             return false
@@ -1695,19 +1791,30 @@ final class DockExposeCoordinator: ObservableObject {
                 Logger.debug("WORKFLOW: First click behavior=appExpose but app not running; allowing Dock launch")
                 return false
             }
-            let windowCountNow = totalWindowCount(bundleIdentifier: bundleIdentifier,
-                                                  appState: appState,
-                                                  windowCountHint: windowCountHint)
-            let diagnostics = appExposeWindowCountDiagnostics(bundleIdentifier: bundleIdentifier,
-                                                              preferPrewarmed: preferPrewarmedAppExposeCount)
+            let diagnostics: WindowManager.AppExposeWindowCountDiagnostics
+            if preferPrewarmedAppExposeCount {
+                guard let readyDiagnostics = WindowManager.appExposeWindowCountDiagnosticsAfterPrewarmIfAvailable(
+                    bundleIdentifier: bundleIdentifier
+                ) else {
+                    Logger.debug("APP_EXPOSE_DECISION: firstClick App Exposé prewarm not ready for \(bundleIdentifier); allowing native Dock click")
+                    scheduleAppExposeAfterPrewarmIfStillCurrent(
+                        for: bundleIdentifier,
+                        frontmostBefore: frontmostBefore,
+                        token: deferredAppExposePrewarmTokenCounter
+                    )
+                    scheduleDockActivationAssertionIfNeeded(for: bundleIdentifier,
+                                                            frontmostBefore: frontmostBefore,
+                                                            reason: "windowCountNotReady")
+                    return false
+                }
+                diagnostics = readyDiagnostics
+            } else {
+                diagnostics = WindowManager.appExposeWindowCountDiagnostics(bundleIdentifier: bundleIdentifier)
+            }
+            let windowCountNow = diagnostics.finalCount
             Logger.debug("APP_EXPOSE_DECISION: firstClick appExpose bundle=\(bundleIdentifier) forceFallback=\(forceActivateFallback) windowsNow=\(windowCountNow) diagnostics=\(diagnostics.summary)")
             if forceActivateFallback {
                 Logger.debug("APP_EXPOSE_DECISION: firstClick forced fallback for \(bundleIdentifier); allowing Dock activation")
-                if preferPrewarmedAppExposeCount {
-                    return performConsumedAppExposeFallbackActivation(bundleIdentifier: bundleIdentifier,
-                                                                      windowCount: windowCountNow,
-                                                                      reason: "forcedFallback")
-                }
                 scheduleDockActivationAssertionIfNeeded(for: bundleIdentifier,
                                                         frontmostBefore: frontmostBefore,
                                                         reason: "forcedFallback")
@@ -1715,26 +1822,17 @@ final class DockExposeCoordinator: ObservableObject {
             }
             if windowCountNow == 0 {
                 Logger.debug("APP_EXPOSE_DECISION: firstClick no-window fallback for \(bundleIdentifier); allowing Dock activation")
-                if preferPrewarmedAppExposeCount {
-                    return performConsumedAppExposeFallbackActivation(bundleIdentifier: bundleIdentifier,
-                                                                      windowCount: windowCountNow,
-                                                                      reason: "noWindows")
-                }
                 scheduleDockActivationAssertionIfNeeded(for: bundleIdentifier,
                                                         frontmostBefore: frontmostBefore,
                                                         reason: "noWindows")
                 return false
             }
-            guard shouldRunFirstClickAppExpose(for: bundleIdentifier,
-                                               appState: nil,
-                                               windowCountHint: nil,
-                                               preferPrewarmed: preferPrewarmedAppExposeCount) else {
+            let requiresMultipleWindows = preferences.firstClickAppExposeRequiresMultipleWindows
+            guard DockDecisionEngine.shouldRunDeferredAppExpose(
+                cachedWindowCount: windowCountNow,
+                requiresMultipleWindows: requiresMultipleWindows
+            ) == true else {
                 Logger.debug("APP_EXPOSE_DECISION: firstClick appExpose skipped by multiple-window gate for \(bundleIdentifier)")
-                if preferPrewarmedAppExposeCount {
-                    return performConsumedAppExposeFallbackActivation(bundleIdentifier: bundleIdentifier,
-                                                                      windowCount: windowCountNow,
-                                                                      reason: "multipleWindowsGate")
-                }
                 scheduleDockActivationAssertionIfNeeded(for: bundleIdentifier,
                                                         frontmostBefore: frontmostBefore,
                                                         reason: "multipleWindowsGate")
@@ -1759,6 +1857,37 @@ final class DockExposeCoordinator: ObservableObject {
                                              source: "firstClick",
                                              delay: 0)
             return true
+        }
+    }
+
+    private func scheduleAppExposeAfterPrewarmIfStillCurrent(for bundleIdentifier: String,
+                                                              frontmostBefore: String?,
+                                                              token: UInt64) {
+        let requiresMultipleWindows = preferences.firstClickAppExposeRequiresMultipleWindows
+        WindowManager.whenAppExposeWindowCountPrewarmCompletes(bundleIdentifier: bundleIdentifier) { [weak self] diagnostics in
+            guard let self else { return }
+            guard token == self.deferredAppExposePrewarmTokenCounter else {
+                Logger.debug("APP_EXPOSE_DECISION: ignoring superseded App Exposé prewarm target=\(bundleIdentifier) token=\(token)")
+                return
+            }
+            guard DockDecisionEngine.shouldRunDeferredAppExpose(
+                cachedWindowCount: diagnostics.finalCount,
+                requiresMultipleWindows: requiresMultipleWindows
+            ) == true else {
+                Logger.debug("APP_EXPOSE_DECISION: deferred App Exposé prewarm resolved below gate for \(bundleIdentifier) diagnostics=\(diagnostics.summary)")
+                return
+            }
+
+            self.lastActionExecuted = .appExpose
+            self.lastActionExecutedBundle = bundleIdentifier
+            self.lastActionExecutedSource = frontmostBefore == bundleIdentifier
+                ? "activeSingleClickDeferredPrewarm"
+                : "firstClickDeferredPrewarm"
+            self.lastActionExecutedAt = Date()
+            Logger.debug("APP_EXPOSE_DECISION: deferred App Exposé prewarm executing for \(bundleIdentifier) diagnostics=\(diagnostics.summary)")
+            self.scheduleDeferredAppExposeTrigger(for: bundleIdentifier,
+                                                  source: "deferredPrewarm",
+                                                  delay: 0)
         }
     }
 
@@ -1871,7 +2000,11 @@ final class DockExposeCoordinator: ObservableObject {
             performMinimizeToggle(bundleIdentifier: bundleIdentifier)
             return true
         case .quitApp:
-            _ = WindowManager.quitApp(bundleIdentifier: bundleIdentifier)
+            // Termination can wait for the target process. Return from the event tap
+            // immediately so macOS does not time it out and replay the Dock click.
+            windowActionQueue.async {
+                _ = WindowManager.quitApp(bundleIdentifier: bundleIdentifier)
+            }
             return true
         @unknown default:
             return false
@@ -2505,8 +2638,9 @@ final class DockExposeCoordinator: ObservableObject {
 
     private func appExposeWindowCountDiagnostics(bundleIdentifier: String,
                                                  preferPrewarmed: Bool) -> WindowManager.AppExposeWindowCountDiagnostics {
-        if preferPrewarmed {
-            return WindowManager.appExposeWindowCountDiagnosticsAfterPrewarmIfAvailable(bundleIdentifier: bundleIdentifier)
+        if preferPrewarmed,
+           let diagnostics = WindowManager.appExposeWindowCountDiagnosticsAfterPrewarmIfAvailable(bundleIdentifier: bundleIdentifier) {
+            return diagnostics
         }
         return WindowManager.appExposeWindowCountDiagnostics(bundleIdentifier: bundleIdentifier)
     }
@@ -2663,28 +2797,6 @@ final class DockExposeCoordinator: ObservableObject {
         return true
     }
 
-    private func performConsumedAppExposeFallbackActivation(bundleIdentifier: String,
-                                                           windowCount: Int,
-                                                           reason: String) -> Bool {
-        Logger.debug("APP_EXPOSE_DECISION: consumed first-click App Exposé fallback activating \(bundleIdentifier) reason=\(reason) windows=\(windowCount)")
-        if WindowManager.isAppHidden(bundleIdentifier: bundleIdentifier) {
-            _ = WindowManager.unhideApp(bundleIdentifier: bundleIdentifier)
-        }
-        if windowCount > 0 {
-            _ = WindowManager.activateAndShowMainWindow(bundleIdentifier: bundleIdentifier)
-        } else {
-            launchApp(bundleIdentifier: bundleIdentifier)
-            if let app = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == bundleIdentifier }) {
-                _ = WindowManager.activate(app)
-            }
-        }
-        resetExposeTracking()
-        recordActionExecution(action: .activateApp,
-                              bundle: bundleIdentifier,
-                              source: "consumedAppExposeFallback:\(reason)")
-        return true
-    }
-
     private func performHideAppToggle(targetBundleIdentifier: String) -> Bool {
         cancelPendingActivationAssertions(reason: "hideAppToggle", bundleIdentifier: targetBundleIdentifier)
 
@@ -2761,6 +2873,45 @@ final class DockExposeCoordinator: ObservableObject {
         }
 
         resetExposeTracking()
+    }
+
+    private func scheduleSingleAppModeFromScroll(targetBundleIdentifier: String,
+                                                  frontmostBefore: String?) {
+        let frontmostNow = FrontmostAppTracker.frontmostBundleIdentifier()
+        let sourceBundleToHide = [frontmostBefore, frontmostNow]
+            .compactMap { $0 }
+            .first(where: { $0 != targetBundleIdentifier })
+
+        if frontmostBefore == targetBundleIdentifier && sourceBundleToHide == nil {
+            resetExposeTracking()
+            return
+        }
+
+        let shouldHideTarget = sourceBundleToHide == nil
+            && (frontmostBefore == targetBundleIdentifier || frontmostNow == targetBundleIdentifier)
+        resetExposeTracking()
+        windowActionQueue.async { [weak self] in
+            if let sourceBundleToHide {
+                _ = WindowManager.hideAllWindows(bundleIdentifier: sourceBundleToHide)
+            } else if shouldHideTarget {
+                _ = WindowManager.hideAllWindows(bundleIdentifier: targetBundleIdentifier)
+                return
+            }
+
+            let targetRunning = NSWorkspace.shared.runningApplications.contains {
+                $0.bundleIdentifier == targetBundleIdentifier
+            }
+            if targetRunning {
+                if WindowManager.isAppHidden(bundleIdentifier: targetBundleIdentifier) {
+                    _ = WindowManager.unhideApp(bundleIdentifier: targetBundleIdentifier)
+                }
+                _ = WindowManager.activateAndShowMainWindow(bundleIdentifier: targetBundleIdentifier)
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.launchApp(bundleIdentifier: targetBundleIdentifier)
+                }
+            }
+        }
     }
 
     private func performMinimizeToggle(bundleIdentifier: String) {

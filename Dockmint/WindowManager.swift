@@ -132,14 +132,7 @@ enum WindowManager {
     private static let appExposePrewarmQueue = DispatchQueue(label: "pzc.Dockmint.appExposeWindowCountPrewarm",
                                                              qos: .userInitiated)
     private static var appExposePrewarmInFlight: Set<String> = []
-    private static let appExposePrewarmWaitTimeout: TimeInterval = timeIntervalFlag(
-        primary: "DOCKMINT_APP_EXPOSE_PREWARM_WAIT_TIMEOUT",
-        defaultValue: 0.03
-    )
-    private static let appExposePrewarmWaitPollInterval: TimeInterval = timeIntervalFlag(
-        primary: "DOCKMINT_APP_EXPOSE_PREWARM_WAIT_POLL_INTERVAL",
-        defaultValue: 0.002
-    )
+    private static var appExposePrewarmCompletions: [String: [(AppExposeWindowCountDiagnostics) -> Void]] = [:]
 
     private static func timeIntervalFlag(primary: String,
                                          defaultValue: TimeInterval,
@@ -201,31 +194,41 @@ enum WindowManager {
 
             windowQueryCacheLock.lock()
             appExposePrewarmInFlight.remove(bundleIdentifier)
+            let completions = appExposePrewarmCompletions.removeValue(forKey: bundleIdentifier) ?? []
             windowQueryCacheLock.unlock()
+
+            guard !completions.isEmpty else { return }
+            DispatchQueue.main.async {
+                for completion in completions {
+                    completion(diagnostics)
+                }
+            }
         }
     }
 
-    static func appExposeWindowCountDiagnosticsAfterPrewarmIfAvailable(bundleIdentifier: String) -> AppExposeWindowCountDiagnostics {
-        _ = windowQueryCacheObserver
-        let deadline = Date().addingTimeInterval(appExposePrewarmWaitTimeout)
-
-        while Date() < deadline {
-            if let diagnostics = cachedAppExposeWindowCountDiagnosticsIfAvailable(for: bundleIdentifier) {
-                return diagnostics
+    static func whenAppExposeWindowCountPrewarmCompletes(
+        bundleIdentifier: String,
+        completion: @escaping (AppExposeWindowCountDiagnostics) -> Void
+    ) {
+        if let cached = cachedAppExposeWindowCountDiagnosticsIfAvailable(for: bundleIdentifier) {
+            DispatchQueue.main.async {
+                completion(cached)
             }
-
-            windowQueryCacheLock.lock()
-            let isPrewarming = appExposePrewarmInFlight.contains(bundleIdentifier)
-            windowQueryCacheLock.unlock()
-
-            guard isPrewarming else {
-                break
-            }
-
-            Thread.sleep(forTimeInterval: appExposePrewarmWaitPollInterval)
+            return
         }
 
-        return appExposeWindowCountDiagnostics(bundleIdentifier: bundleIdentifier)
+        windowQueryCacheLock.lock()
+        appExposePrewarmCompletions[bundleIdentifier, default: []].append(completion)
+        let shouldStartPrewarm = !appExposePrewarmInFlight.contains(bundleIdentifier)
+        windowQueryCacheLock.unlock()
+
+        if shouldStartPrewarm {
+            prewarmAppExposeWindowCount(bundleIdentifier: bundleIdentifier)
+        }
+    }
+
+    static func appExposeWindowCountDiagnosticsAfterPrewarmIfAvailable(bundleIdentifier: String) -> AppExposeWindowCountDiagnostics? {
+        cachedAppExposeWindowCountDiagnosticsIfAvailable(for: bundleIdentifier)
     }
 
     private static func cachedWindowQueryValue<Value>(

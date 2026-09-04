@@ -1873,6 +1873,13 @@ final class Preferences: ObservableObject {
         shiftOptionFolderScrollDownAction = folderDefaults.shiftOptionScrollDown
     }
 
+    func beginOnboarding() {
+        guard !isOnboardingCompleted else { return }
+        // Persist the session even when onboarding was opened with a temporary
+        // launch override: System Settings reopens the app without those arguments.
+        onboardingState = .permissions
+    }
+
     func advanceOnboarding() {
         guard onboardingState != .completed else { return }
         onboardingState = onboardingState.next

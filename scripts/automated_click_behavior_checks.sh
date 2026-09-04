@@ -6,6 +6,7 @@ source "$SCRIPT_DIR/lib/test_common.sh"
 
 LOG_FILE="/tmp/dockmint-click-behavior-automation.log"
 ACTIVE_CLICK_ROUNDS="${ACTIVE_CLICK_ROUNDS:-2}"
+SINGLE_WINDOW_ACTIVATION_ROUNDS="${SINGLE_WINDOW_ACTIVATION_ROUNDS:-8}"
 
 run_test_preflight true
 capture_dock_state
@@ -28,6 +29,21 @@ assert_log_contains() {
     echo "  expected log: $needle"
     exit 1
   fi
+}
+
+wait_for_frontmost_bundle() {
+  local bundle_identifier="$1"
+  local timeout_seconds="${2:-2}"
+  local deadline=$((SECONDS + timeout_seconds))
+
+  while (( SECONDS <= deadline )); do
+    if [[ "$(frontmost_bundle_id)" == "$bundle_identifier" ]]; then
+      return 0
+    fi
+    sleep 0.1
+  done
+
+  return 1
 }
 
 retry_on_dock_context_menu() {
@@ -76,18 +92,44 @@ assert_dockmint_alive "$LOG_FILE" "click behavior startup"
 set_process_visible "$single_process" true
 set_process_visible "$multi_process" true
 
-for attempt in 1 2; do
-  activate_finder
-  sleep 0.6
-  dock_click_with_hold "$single_icon" 220
-  sleep 0.5
-  if retry_on_dock_context_menu "$single_icon" "${single_bundle}-single-window-pass-through-attempt-${attempt}"; then
-    [[ "$attempt" -lt 2 ]] || { echo "  FAIL single-window pass-through opened Dock context menu twice"; exit 1; }
-    continue
-  fi
-  break
+for round in $(seq 1 "$SINGLE_WINDOW_ACTIVATION_ROUNDS"); do
+  round_success=false
+  for attempt in 1 2; do
+    activate_process_direct "$multi_process"
+    wait_for_frontmost_bundle "$multi_bundle" || {
+      echo "  FAIL could not make $multi_bundle frontmost before single-window round $round"
+      exit 1
+    }
+
+    synthetic_releases_before="$(grep -Fc "Passthrough synthetic release event" "$LOG_FILE" 2>/dev/null || true)"
+    dock_click_with_hold "$single_icon" 220
+    sleep 0.5
+    if retry_on_dock_context_menu "$single_icon" "${single_bundle}-single-window-pass-through-round-${round}-attempt-${attempt}"; then
+      [[ "$attempt" -lt 2 ]] || { echo "  FAIL single-window pass-through opened Dock context menu twice"; exit 1; }
+      continue
+    fi
+
+    if ! wait_for_frontmost_bundle "$single_bundle"; then
+      echo "  FAIL single-window Dock click did not activate $single_bundle in round $round"
+      echo "  frontmost bundle: $(frontmost_bundle_id)"
+      capture_gui_failure_artifacts "single-window-activation-round-${round}" "$LOG_FILE" >/dev/null 2>&1 || true
+      exit 1
+    fi
+
+    synthetic_releases_after="$(grep -Fc "Passthrough synthetic release event" "$LOG_FILE" 2>/dev/null || true)"
+    if (( synthetic_releases_after != synthetic_releases_before )); then
+      echo "  FAIL single-window native fallback emitted a synthetic release in round $round"
+      exit 1
+    fi
+
+    round_success=true
+    break
+  done
+
+  [[ "$round_success" == true ]] || { echo "  FAIL single-window activation round $round"; exit 1; }
 done
 assert_log_contains "firstClick appExpose skipped by multiple-window gate for $single_bundle" "single-window first click stayed pass-through"
+echo "  PASS single-window Dock clicks activated natively across $SINGLE_WINDOW_ACTIVATION_ROUNDS rounds"
 
 for attempt in 1 2; do
   activate_finder

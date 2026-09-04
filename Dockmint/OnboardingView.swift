@@ -1,281 +1,108 @@
+import AppKit
 import SwiftUI
-
-private struct OnboardingContentHeightPreferenceKey: SwiftUI.PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
 
 struct OnboardingView: View {
     @ObservedObject var coordinator: DockExposeCoordinator
     @ObservedObject var preferences: Preferences
-    var onContentHeightChange: (CGFloat) -> Void = { _ in }
-
-    @State private var showPermissionsRequiredPopover = false
-    @State private var showMenuBarHint = false
-
-    private let appDisplayName = AppServices.appDisplayName
-
-    private var loginItemAvailable: Bool {
-        AppIdentity.supportsLoginItem
-    }
-
-    private var updatesAvailable: Bool {
-        AppIdentity.supportsUpdates
-    }
+    var onFinish: (Bool) -> Void = { _ in }
+    @State private var openSettingsWhenFinished = false
 
     private var permissionsReady: Bool {
-        coordinator.accessibilityGranted && coordinator.inputMonitoringGranted
-    }
-
-    private var missingPermissionsMessage: String {
-        var missing: [String] = []
-        if !coordinator.accessibilityGranted {
-            missing.append("Accessibility")
-        }
-        if !coordinator.inputMonitoringGranted {
-            missing.append("Input Monitoring")
-        }
-        return "Allow \(missing.joined(separator: " and ")) permissions to finish setup."
+        OnboardingSetup.canFinish(
+            accessibilityGranted: coordinator.accessibilityGranted,
+            inputMonitoringGranted: coordinator.inputMonitoringGranted
+        )
     }
 
     var body: some View {
-        Group {
-            if showMenuBarHint {
-                measuredContent(completionView)
-            } else {
-                ScrollView {
-                    measuredContent(setupView)
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 20) {
+                    VStack(spacing: 8) {
+                        Image(nsImage: StatusBarIcon.image(pointSize: 40))
+                            .renderingMode(.template)
+                            .accessibilityLabel("\(AppServices.appDisplayName) menu bar icon")
+                        Text("Welcome to \(AppServices.appDisplayName)")
+                            .font(.title2.weight(.semibold))
+                        Text("Customize clicks and scrolling on the Dock.")
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Enable both permissions to get started.")
+                            .foregroundStyle(.secondary)
+                        permissionRow(
+                            .accessibility,
+                            granted: coordinator.accessibilityGranted,
+                            detail: "Identify Dock icons and perform actions."
+                        )
+                        permissionRow(
+                            .inputMonitoring,
+                            granted: coordinator.inputMonitoringGranted,
+                            detail: "Respond to clicks and scrolling on the Dock."
+                        )
+                    }
+                    .accessibilityIdentifier("onboarding-step-permissions")
+
+                    Text("Try it: click a Dock app with multiple windows open, or scroll on an app icon.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .scrollIndicators(.automatic)
-                .scrollBounceBehavior(.basedOnSize)
+                .padding(24)
             }
+            .scrollIndicators(.hidden)
+            .scrollBounceBehavior(.basedOnSize)
+            Divider()
+            HStack {
+                Toggle("Open Settings when finished", isOn: $openSettingsWhenFinished)
+                    .toggleStyle(.checkbox)
+                Spacer()
+                Button("Get Started", action: finish)
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!permissionsReady)
+                    .help(permissionsReady ? "Finish setup" : "Enable both permissions to continue.")
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
         }
-        .onPreferenceChange(OnboardingContentHeightPreferenceKey.self) { height in
-            guard height > 0 else { return }
-            onContentHeightChange(height)
-        }
+        .font(.body)
         .onAppear {
+            preferences.beginOnboarding()
             coordinator.refreshPermissionsAfterExternalChange()
         }
-        .onChange(of: permissionsReady) { ready in
-            if ready {
-                showPermissionsRequiredPopover = false
-            }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            coordinator.refreshPermissionsAfterExternalChange()
         }
     }
 
-    private var setupView: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            header
-            permissionsSection
-            if loginItemAvailable || !AppIdentity.isDevelopmentIdentity {
-                loginItemSection
-            }
-            detectedMouseScrollToolSection
-            updatesSection
-            footerActions
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-
-    private func measuredContent<Content: View>(_ content: Content) -> some View {
-        content
-            .fixedSize(horizontal: false, vertical: true)
-            .background(
-                GeometryReader { proxy in
-                    Color.clear.preference(
-                        key: OnboardingContentHeightPreferenceKey.self,
-                        value: proxy.size.height
-                    )
-                }
-            )
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Welcome to \(appDisplayName)")
-                .font(.title2.weight(.semibold))
-
-            Text("Dockmint adds custom click and scroll actions to app and folder icons in the Dock.")
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var permissionsSection: some View {
-        onboardingSection(
-            title: "Permissions",
-            description: "Dockmint needs Accessibility and Input Monitoring permissions to work."
-        ) {
-            SharedPermissionsSection(
-                coordinator: coordinator,
-                footerText: permissionsFooterText
-            )
-        }
-    }
-
-    private var permissionsFooterText: String? {
-        if permissionsReady {
-            return "All required permissions are enabled."
-        }
-        return nil
-    }
-
-    private var loginItemSection: some View {
-        onboardingSection(
-            title: "Start at Login",
-            description: "Choose whether \(appDisplayName) should start automatically when you log in."
-        ) {
-            if loginItemAvailable {
-                Toggle("Start \(appDisplayName) at login", isOn: $preferences.startAtLogin)
-            } else {
-                Text("Start at Login is unavailable in this build.")
-                    .font(.callout)
+    private func permissionRow(_ permission: DockmintPermission, granted: Bool, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: granted ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(granted ? Color.green : Color.secondary)
+                .accessibilityLabel(granted ? "Granted" : "Required")
+            VStack(alignment: .leading, spacing: 4) {
+                Text(permission.title)
+                Text(detail)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            Spacer(minLength: 12)
+            Button("Open Settings") {
+                coordinator.requestPermissionFromUser(permission)
+            }
+            .help("Open \(permission.title) in System Settings")
         }
     }
 
-    @ViewBuilder
-    private var detectedMouseScrollToolSection: some View {
-        if let tool = MouseScrollDirectionToolDetector.detectedTools().first(where: { preferences.shouldSuggestReverseMouseScrollDuringOnboarding(for: $0) }) {
-            onboardingSection(
-                title: "Mouse Scroll Direction",
-                description: "Detected \(tool.displayName). If you use LinearMouse, Mos, UnnaturalScrollWheels, or a similar app to reverse your mouse's scrolling direction, turn this on so Dockmint's Scroll Up and Scroll Down actions match your mouse. Trackpad and other continuous scrolling gestures keep following macOS behavior."
-            ) {
-                HStack(spacing: 8) {
-                    Button("Turn On Reverse Mouse Scroll Direction") {
-                        preferences.enableReverseMouseScrollActionsFromSuggestion(for: tool)
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button("Not Now") {
-                        preferences.dismissMouseScrollToolSuggestion(for: tool)
-                    }
-                    .buttonStyle(.bordered)
-                }
-            }
-        }
-    }
-
-    private var updatesSection: some View {
-        onboardingSection(
-            title: "Updates",
-            description: ""
-        ) {
-            Toggle("Enable background update checks", isOn: $preferences.backgroundUpdateChecksEnabled)
-                .disabled(!updatesAvailable)
-
-            if !updatesAvailable && !AppIdentity.isDevelopmentIdentity {
-                Text("Background update checks are unavailable in this build.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else if updatesAvailable && preferences.backgroundUpdateChecksEnabled {
-                HStack(spacing: 8) {
-                    Text("Check")
-                        .foregroundStyle(.secondary)
-
-                    Picker("", selection: $preferences.updateCheckFrequency) {
-                        ForEach(UpdateCheckFrequency.allCases.filter { $0 != .never }) { frequency in
-                            Text(frequency.displayName).tag(frequency)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .frame(width: 180, alignment: .leading)
-                }
-            } else if updatesAvailable {
-                Text("Background checks stay off until you opt in. Manual update checks remain available.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private var footerActions: some View {
-        HStack {
-            Spacer()
-
-            Button("Finish Setup") {
-                if permissionsReady {
-                    showMenuBarHint = true
-                } else {
-                    showPermissionsRequiredPopover = true
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .keyboardShortcut(.defaultAction)
-            .help(permissionsReady ? "Finish setup" : missingPermissionsMessage)
-            .popover(isPresented: $showPermissionsRequiredPopover, arrowEdge: .top) {
-                Text(missingPermissionsMessage)
-                    .padding(12)
-                    .frame(width: 260, alignment: .leading)
-            }
-        }
-    }
-
-    private var completionView: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("You’re all set")
-                .font(.title2.weight(.semibold))
-
-            Text("Here is the icon in your menu bar for \(appDisplayName). Use it any time to open Settings or quit \(appDisplayName).")
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack {
-                Spacer()
-
-                Image(nsImage: StatusBarIcon.image(pointSize: 42))
-                    .renderingMode(.template)
-                    .foregroundStyle(.primary)
-                    .frame(width: 42, height: 42)
-
-                Spacer()
-            }
-            .padding(.top, 4)
-
-            HStack {
-                Spacer()
-
-                Button("Done") {
-                    for tool in MouseScrollDirectionToolDetector.detectedTools() {
-                        preferences.markMouseScrollToolSuggestionSeen(for: tool)
-                    }
-                    preferences.completeOnboarding()
-                    NSApp.keyWindow?.close()
-                }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-
-    @ViewBuilder
-    private func onboardingSection<Content: View>(title: String,
-                                                  description: String,
-                                                  @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.title3.weight(.semibold))
-
-            if !description.isEmpty {
-                Text(description)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            content()
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+    private func finish() {
+        coordinator.refreshPermissionsAfterExternalChange()
+        guard permissionsReady else { return }
+        preferences.completeOnboarding()
+        onFinish(openSettingsWhenFinished)
     }
 }
 

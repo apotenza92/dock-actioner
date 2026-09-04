@@ -253,6 +253,95 @@ func runDecisionEngineTests() {
         "deferred modifier clicks should not finish early"
     )
 
+    expect(
+        DockDecisionEngine.shouldConsumePendingMouseDown(
+            consumeClick: true,
+            isDeferredAppExposeWindowCount: true,
+            shouldFinishModifierClickEarly: false
+        ) == false,
+        "deferred App Expose should pass mouse-down through for native fallback"
+    )
+
+    expect(
+        DockDecisionEngine.shouldConsumePendingMouseDown(
+            consumeClick: true,
+            isDeferredAppExposeWindowCount: false,
+            shouldFinishModifierClickEarly: false
+        ) == true,
+        "non-deferred consumed actions should consume mouse-down"
+    )
+
+    expect(
+        DockDecisionEngine.shouldRunDeferredAppExpose(
+            cachedWindowCount: nil,
+            requiresMultipleWindows: true
+        ) == nil,
+        "deferred App Expose should fail open when its window count is not ready"
+    )
+
+    expect(
+        DockDecisionEngine.shouldRunDeferredAppExpose(
+            cachedWindowCount: 2,
+            requiresMultipleWindows: true
+        ) == true,
+        "deferred App Expose should run when a ready count passes its gate"
+    )
+
+    var visibleWindowQueryCount = 0
+    let cachedVisibleWindowState = DockDecisionEngine.resolveVisibleWindowState(cachedValue: true) {
+        visibleWindowQueryCount += 1
+        return false
+    }
+    expect(cachedVisibleWindowState && visibleWindowQueryCount == 0,
+           "cached visible-window state should not execute its query")
+
+    let resolvedVisibleWindowState = DockDecisionEngine.resolveVisibleWindowState(cachedValue: nil) {
+        visibleWindowQueryCount += 1
+        return false
+    }
+    expect(!resolvedVisibleWindowState && visibleWindowQueryCount == 1,
+           "missing visible-window state should execute its query once")
+
+    expect(
+        DockDecisionEngine.canReuseMouseDownDockTarget(
+            mouseDown: CGPoint(x: 100, y: 200),
+            mouseUp: CGPoint(x: 103, y: 204),
+            movementThreshold: 6
+        ),
+        "stationary mouse-up should reuse the mouse-down Dock target"
+    )
+    expect(
+        !DockDecisionEngine.canReuseMouseDownDockTarget(
+            mouseDown: CGPoint(x: 100, y: 200),
+            mouseUp: CGPoint(x: 107, y: 200),
+            movementThreshold: 6
+        ),
+        "moved mouse-up should resolve its Dock target again"
+    )
+
+    let eventTapTelemetry = EventTapPerformanceTelemetry()
+    eventTapTelemetry.recordHandlerDuration(0.003)
+    eventTapTelemetry.recordHandlerDuration(0.012)
+    eventTapTelemetry.recordHandlerDuration(0.075)
+    eventTapTelemetry.recordTimeout()
+    let eventTapSnapshot = eventTapTelemetry.snapshot()
+    expect(eventTapSnapshot.eventCount == 3
+           && eventTapSnapshot.eventsOver5Milliseconds == 2
+           && eventTapSnapshot.eventsOver10Milliseconds == 2
+           && eventTapSnapshot.eventsOver50Milliseconds == 1
+           && eventTapSnapshot.timeoutCount == 1
+           && abs(eventTapSnapshot.maximumDurationMilliseconds - 75) < 0.001,
+           "event tap telemetry should report latency buckets and timeouts")
+
+    expect(!DockDecisionEngine.shouldConsumeDeferredScrollAction(action: .none, isRunning: true),
+           "unconfigured scroll should pass through")
+    expect(!DockDecisionEngine.shouldConsumeDeferredScrollAction(action: .appExpose, isRunning: true),
+           "App Expose scroll should preserve system scroll pass-through")
+    expect(!DockDecisionEngine.shouldConsumeDeferredScrollAction(action: .activateApp, isRunning: false),
+           "activate scroll should pass through when its app is not running")
+    expect(DockDecisionEngine.shouldConsumeDeferredScrollAction(action: .hideOthers, isRunning: true),
+           "configured window actions should remain consumed when deferred")
+
     // shouldConsumeActiveClickAction
     expect(
         DockDecisionEngine.shouldConsumeActiveClickAction(

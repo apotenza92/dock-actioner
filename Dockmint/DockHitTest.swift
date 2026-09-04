@@ -1,5 +1,54 @@
 import Cocoa
 
+struct DockHitTestStableMetadataCache {
+    private var cachedDisplayBounds: [CGRect]?
+    private var cachedDockProcessIdentifier: pid_t?
+    private var didResolveDockProcessIdentifier = false
+    private var bundleIdentifiersByURL: [URL: String] = [:]
+
+    mutating func displayBounds(containing point: CGPoint,
+                                load: () -> [CGRect]) -> CGRect? {
+        if cachedDisplayBounds == nil {
+            cachedDisplayBounds = load()
+        }
+        return cachedDisplayBounds?.first { $0.contains(point) }
+    }
+
+    mutating func dockProcessIdentifier(load: () -> pid_t?) -> pid_t? {
+        if !didResolveDockProcessIdentifier {
+            cachedDockProcessIdentifier = load()
+            didResolveDockProcessIdentifier = true
+        }
+        return cachedDockProcessIdentifier
+    }
+
+    mutating func bundleIdentifier(for url: URL,
+                                   load: () -> String?) -> String? {
+        if let cached = bundleIdentifiersByURL[url] {
+            return cached
+        }
+        guard let resolved = load() else { return nil }
+        bundleIdentifiersByURL[url] = resolved
+        return resolved
+    }
+
+    mutating func invalidateDisplayBounds() {
+        cachedDisplayBounds = nil
+    }
+
+    mutating func invalidateDockProcessIdentifier() {
+        cachedDockProcessIdentifier = nil
+        didResolveDockProcessIdentifier = false
+        bundleIdentifiersByURL.removeAll()
+    }
+}
+
+private func dockHitTestDisplayReconfigurationCallback(_ display: CGDirectDisplayID,
+                                                       _ flags: CGDisplayChangeSummaryFlags,
+                                                       _ userInfo: UnsafeMutableRawPointer?) {
+    DockHitTest.invalidateDisplayBoundsCache()
+}
+
 enum DockHitTest {
     enum PointKind: Equatable {
         case appDockIcon(String)
@@ -7,6 +56,39 @@ enum DockHitTest {
         case dockBackground
         case outsideDock
     }
+
+    private final class StableMetadataObserver {
+        private var workspaceObservers: [NSObjectProtocol] = []
+
+        init() {
+            CGDisplayRegisterReconfigurationCallback(dockHitTestDisplayReconfigurationCallback, nil)
+            let center = NSWorkspace.shared.notificationCenter
+            let invalidateDock: (Notification) -> Void = { notification in
+                guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                      app.bundleIdentifier == "com.apple.dock" else { return }
+                DockHitTest.invalidateDockProcessCache()
+            }
+            workspaceObservers.append(center.addObserver(forName: NSWorkspace.didLaunchApplicationNotification,
+                                                         object: nil,
+                                                         queue: .main,
+                                                         using: invalidateDock))
+            workspaceObservers.append(center.addObserver(forName: NSWorkspace.didTerminateApplicationNotification,
+                                                         object: nil,
+                                                         queue: .main,
+                                                         using: invalidateDock))
+        }
+
+        deinit {
+            CGDisplayRemoveReconfigurationCallback(dockHitTestDisplayReconfigurationCallback, nil)
+            for observer in workspaceObservers {
+                NSWorkspace.shared.notificationCenter.removeObserver(observer)
+            }
+        }
+    }
+
+    private static let stableMetadataLock = NSLock()
+    private static var stableMetadataCache = DockHitTestStableMetadataCache()
+    private static let stableMetadataObserver = StableMetadataObserver()
 
     static func bundleIdentifierAtPoint(_ point: CGPoint) -> String? {
         if case let .appDockIcon(bundle) = pointKind(at: point) {
@@ -45,6 +127,7 @@ enum DockHitTest {
     }
 
     static func pointKind(at point: CGPoint) -> PointKind {
+        _ = stableMetadataObserver
         guard isNearDockEdge(point) else { return .outsideDock }
         guard let element = element(at: point) else { return .outsideDock }
         guard isInDockProcess(element) else { return .outsideDock }
@@ -68,6 +151,9 @@ enum DockHitTest {
     static func neutralBackgroundPoint(near point: CGPoint,
                                        searchRadius: CGFloat = 120,
                                        step: CGFloat = 12) -> CGPoint? {
+        // Recovery runs on the event-tap run loop; never scan hundreds of AX points
+        // while a physical release is waiting to be delivered.
+        let deadline = ProcessInfo.processInfo.systemUptime + 0.01
         if pointKind(at: point) == .dockBackground {
             return point
         }
@@ -85,14 +171,16 @@ enum DockHitTest {
                 CGPoint(x: point.x - distance, y: point.y),
                 CGPoint(x: point.x + distance, y: point.y)
             ]
-            for candidate in candidates where pointKind(at: candidate) == .dockBackground {
-                return candidate
+            for candidate in candidates {
+                guard ProcessInfo.processInfo.systemUptime < deadline else { return nil }
+                if pointKind(at: candidate) == .dockBackground { return candidate }
             }
         }
 
         for dy in offsets {
             for dx in offsets {
                 if dx == 0, dy == 0 { continue }
+                guard ProcessInfo.processInfo.systemUptime < deadline else { return nil }
                 let candidate = CGPoint(x: point.x + dx, y: point.y + dy)
                 if pointKind(at: candidate) == .dockBackground {
                     return candidate
@@ -107,8 +195,9 @@ enum DockHitTest {
                 CGPoint(x: point.x - distance, y: point.y),
                 CGPoint(x: point.x + distance, y: point.y)
             ]
-            for candidate in candidates where pointKind(at: candidate) == .dockBackground {
-                return candidate
+            for candidate in candidates {
+                guard ProcessInfo.processInfo.systemUptime < deadline else { return nil }
+                if pointKind(at: candidate) == .dockBackground { return candidate }
             }
         }
 
@@ -131,22 +220,36 @@ enum DockHitTest {
         return distLeft <= threshold || distRight <= threshold || distBottom <= threshold
     }
 
+    static func invalidateDisplayBoundsCache() {
+        stableMetadataLock.lock()
+        stableMetadataCache.invalidateDisplayBounds()
+        stableMetadataLock.unlock()
+    }
+
+    static func invalidateDockProcessCache() {
+        stableMetadataLock.lock()
+        stableMetadataCache.invalidateDockProcessIdentifier()
+        stableMetadataLock.unlock()
+    }
+
     private static func displayBounds(containing point: CGPoint) -> CGRect? {
+        stableMetadataLock.lock()
+        defer { stableMetadataLock.unlock() }
+        return stableMetadataCache.displayBounds(containing: point) {
+            activeDisplayBounds()
+        }
+    }
+
+    private static func activeDisplayBounds() -> [CGRect] {
         var count: UInt32 = 0
         if CGGetActiveDisplayList(0, nil, &count) != .success || count == 0 {
-            return nil
+            return []
         }
         var displays = Array(repeating: CGDirectDisplayID(0), count: Int(count))
         if CGGetActiveDisplayList(count, &displays, &count) != .success {
-            return nil
+            return []
         }
-        for id in displays {
-            let b = CGDisplayBounds(id)
-            if b.contains(point) {
-                return b
-            }
-        }
-        return nil
+        return displays.prefix(Int(count)).map(CGDisplayBounds)
     }
 
     private static func element(at point: CGPoint) -> AXUIElement? {
@@ -175,13 +278,16 @@ enum DockHitTest {
             Logger.debug("AXUIElementGetPid failed with \(result.rawValue)")
             return false
         }
-        guard let app = NSRunningApplication(processIdentifier: pid) else {
-            Logger.debug("No running app for pid \(pid)")
-            return false
+        stableMetadataLock.lock()
+        let dockPID = stableMetadataCache.dockProcessIdentifier {
+            NSWorkspace.shared.runningApplications.first {
+                $0.bundleIdentifier == "com.apple.dock"
+            }?.processIdentifier
         }
-        let inDock = app.bundleIdentifier == "com.apple.dock"
+        stableMetadataLock.unlock()
+        let inDock = pid == dockPID
         if !inDock {
-            Logger.debug("Element pid \(pid) bundle \(app.bundleIdentifier ?? "nil") is not Dock.")
+            Logger.debug("Element pid \(pid) is not cached Dock pid \(dockPID.map(String.init) ?? "nil").")
         }
         return inDock
     }
@@ -212,7 +318,12 @@ enum DockHitTest {
 
     private static func bundleIdentifier(forApplicationURL url: URL?) -> String? {
         guard let url else { return nil }
-        guard let bundle = Bundle(url: url), let bundleIdentifier = bundle.bundleIdentifier else {
+        stableMetadataLock.lock()
+        let bundleIdentifier = stableMetadataCache.bundleIdentifier(for: url) {
+            Bundle(url: url)?.bundleIdentifier
+        }
+        stableMetadataLock.unlock()
+        guard let bundleIdentifier else {
             Logger.debug("No bundleIdentifier resolved from AXURL: \(url.path)")
             return nil
         }

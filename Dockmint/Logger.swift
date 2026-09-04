@@ -1,6 +1,39 @@
 import Foundation
 import os
 
+final class PersistentLogWriter {
+    let url: URL
+    private var handle: FileHandle?
+
+    init(url: URL) throws {
+        self.url = url
+        if !FileManager.default.fileExists(atPath: url.path) {
+            guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+        }
+        let handle = try FileHandle(forWritingTo: url)
+        try handle.seekToEnd()
+        self.handle = handle
+    }
+
+    func append(line: String) throws {
+        guard let handle else { throw CocoaError(.fileNoSuchFile) }
+        guard let data = (line + "\n").data(using: .utf8) else { return }
+        try handle.write(contentsOf: data)
+    }
+
+    func close() throws {
+        guard let handle else { return }
+        try handle.close()
+        self.handle = nil
+    }
+
+    deinit {
+        try? handle?.close()
+    }
+}
+
 /// Lightweight logger that writes operational events to unified logging, and only writes
 /// diagnostic/debug output when the user opts in or a local debug override is enabled.
 /// Persistent logs are separated by app identity so development and release runs do not share folders.
@@ -28,6 +61,7 @@ enum Logger {
     private static let queue = DispatchQueue(label: "com.dockappexpose.logger")
     private static var preparedForLaunch = false
     private static var runLogURL: URL?
+    private static var persistentWriter: PersistentLogWriter?
 
     static func prepareForLaunch() {
         queue.sync {
@@ -86,14 +120,11 @@ enum Logger {
                 try fm.createDirectory(at: logDirectory, withIntermediateDirectories: true)
             }
             let targetURL = try ensureRunLogURL(fileManager: fm)
-            let data = (line + "\n").data(using: .utf8) ?? Data()
-            if fm.fileExists(atPath: targetURL.path), let handle = try? FileHandle(forWritingTo: targetURL) {
-                try handle.seekToEnd()
-                try handle.write(contentsOf: data)
-                try handle.close()
-            } else {
-                try data.write(to: targetURL, options: .atomic)
+            if persistentWriter?.url != targetURL {
+                try persistentWriter?.close()
+                persistentWriter = try PersistentLogWriter(url: targetURL)
             }
+            try persistentWriter?.append(line: line)
         } catch {
             // Ignore file logging failures; keep the app running.
         }
@@ -152,6 +183,9 @@ enum Logger {
 
     private static func clearPersistentLogFiles() {
         let fileManager = FileManager.default
+        try? persistentWriter?.close()
+        persistentWriter = nil
+        runLogURL = nil
         guard fileManager.fileExists(atPath: logDirectory.path) else { return }
         guard let items = try? fileManager.contentsOfDirectory(at: logDirectory, includingPropertiesForKeys: nil) else {
             return
