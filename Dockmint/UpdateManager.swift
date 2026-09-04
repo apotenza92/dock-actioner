@@ -33,7 +33,8 @@ final class UpdateManager: NSObject, ObservableObject, SPUUpdaterDelegate {
               let data = FileManager.default.contents(atPath: path),
               let configuration = try? JSONDecoder().decode(RelaunchTestConfiguration.self, from: data),
               configuration.expiresAt > Date().timeIntervalSince1970,
-              configuration.bundlePath == Bundle.main.bundlePath,
+              URL(fileURLWithPath: configuration.bundlePath).resolvingSymlinksInPath()
+                == Bundle.main.bundleURL.resolvingSymlinksInPath(),
               configuration.resultPath.hasPrefix("/") else {
             return nil
         }

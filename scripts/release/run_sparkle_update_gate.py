@@ -248,6 +248,17 @@ def verify_installed_update(
         raise RuntimeError("Sparkle result marker was written but installed app version did not change")
 
 
+def relaunch_test_configuration(app: Path, result: Path, version: str) -> dict:
+    # Launch Services resolves /var to /private/var when Sparkle relaunches.
+    # Match the real bundle location while retaining the exact-path constraint.
+    return {
+        "expectedVersion": version,
+        "resultPath": str(result.resolve()),
+        "bundlePath": str(app.resolve()),
+        "expiresAt": time.time() + 300,
+    }
+
+
 def run_real_gate(
     previous_zip: Path,
     candidate_zip: Path,
@@ -263,7 +274,7 @@ def run_real_gate(
     diagnostics = Path("sparkle-gate-diagnostics")
     diagnostics.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="dockmint-sparkle-n-minus-one-") as raw:
-        root = Path(raw)
+        root = Path(raw).resolve()
         installed = root / "Applications"
         previous_app = extract_app(previous_zip, installed, expected_app)
         server_root = root / "server"
@@ -277,12 +288,7 @@ def run_real_gate(
         temporary.mkdir(mode=0o700)
         relaunch_configuration.write_text(
             json.dumps(
-                {
-                    "expectedVersion": expected_version,
-                    "resultPath": str(result_path),
-                    "bundlePath": str(previous_app),
-                    "expiresAt": time.time() + 300,
-                }
+                relaunch_test_configuration(previous_app, result_path, expected_version)
             ),
             encoding="utf-8",
         )

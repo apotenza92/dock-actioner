@@ -287,7 +287,9 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn("actions/attest", draft)
         self.assertIn("gh attestation verify", homebrew)
         self.assertIn("actions/create-github-app-token", homebrew)
-        self.assertIn("publish-homebrew-v1", homebrew)
+        self.assertIn("actions/workflows/publish-homebrew.yml/dispatches", homebrew)
+        self.assertIn("permission-actions: write", homebrew)
+        self.assertNotIn("permission-contents: write", homebrew)
         self.assertNotIn("gh run watch", homebrew)
         self.assertNotIn("git commit", homebrew)
         self.assertNotIn("git push", homebrew)
@@ -521,6 +523,24 @@ class GeneratorTests(unittest.TestCase):
 
 
 class VerifierTests(unittest.TestCase):
+    def test_relaunch_configuration_resolves_symlinked_bundle_paths(self):
+        gate = load_module("relaunch_gate", "run_sparkle_update_gate.py")
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            real = root / "private" / "var"
+            real.mkdir(parents=True)
+            alias = root / "var"
+            alias.symlink_to(real, target_is_directory=True)
+            app = real / "Dockmint.app"
+            app.mkdir()
+            configuration = gate.relaunch_test_configuration(
+                alias / app.name, alias / "result.txt", "0.4.6"
+            )
+            self.assertEqual(configuration["bundlePath"], str(app.resolve()))
+            self.assertEqual(configuration["resultPath"], str(real.resolve() / "result.txt"))
+            self.assertEqual(configuration["expectedVersion"], "0.4.6")
+            self.assertNotEqual(configuration["bundlePath"], str((real / "Other.app").resolve()))
+
     def test_appcast_filename_maps_to_exact_channel_architecture_asset(self):
         self.assertEqual(
             appcast_verifier.expected_asset_for_feed("stable-arm64.xml", "1.2.3"),
