@@ -5,25 +5,20 @@
     <description>Dockmint update feed (stable channel)</description>
     <language>en</language>
     <item>
-      <title>Version 0.4.6</title>
-      <link>https://github.com/apotenza92/dockmint/releases/tag/v0.4.6</link>
-      <sparkle:version>400690000</sparkle:version>
-      <sparkle:shortVersionString>0.4.6</sparkle:shortVersionString>
+      <title>Version 0.4.7</title>
+      <link>https://github.com/apotenza92/dockmint/releases/tag/v0.4.7</link>
+      <sparkle:version>400790000</sparkle:version>
+      <sparkle:shortVersionString>0.4.7</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/apotenza92/dockmint/blob/main/CHANGELOG.md</sparkle:fullReleaseNotesLink>
-      <description sparkle:format="plain-text"><![CDATA[- Fixed updater verification after macOS resolves a temporary bundle path during relaunch, and retained diagnostics for future failures.
-- Corrected Homebrew publication dispatch to use the tap’s Actions-only workflow.
-- Kept release app identity overrides separate from package resources so PermissionFlow bundles correctly.
-- Selected Xcode 26.2 for release builds to support PermissionFlow’s Swift 6.2 requirement.
-- Replaced the Settings sidebar with three native toolbar tabs, consistent compact window sizing, and native action tables.
-- Simplified onboarding to one screen with permission status, PermissionFlow guidance, and a short Dock interaction tip.
-- Kept setup incomplete across permission restarts until Get Started is clicked, with an optional Settings shortcut that defaults off.
-- Improved General's alignment, permission status, keyboard focus, and first-opening placement on the primary display.
-- Moved expensive Dock window queries off the event-tap path, improved native click fallback, and added responsiveness diagnostics and regression coverage.]]></description>
-      <pubDate>Fri, 04 Sep 2026 08:11:57 +0000</pubDate>
-      <enclosure url="https://github.com/apotenza92/dockmint/releases/download/v0.4.6/Dockmint-v0.4.6-macos-x64.zip"
-                 sparkle:edSignature="p53HXrOyas8F769mpmNrzGbSLmcdMOXF9lM79Tcsv38mFZ7uG6a2CmRp/UcLI/xY5b0RIWlSjNDCgtd5/bixDg=="
-                 length="3174001"
+      <description sparkle:format="plain-text"><![CDATA[- Fixed Dock clicks remaining pressed for apps with multiple windows by preserving the physical mouse release whenever the press passes through.
+- Prefer the target Dock icon’s App Exposé accessibility action, with a guarded notification fallback.
+- Keep successful, acknowledged App Exposé actions tracked when macOS does not expose a matching visual window-list change.
+- Added click-pairing and App Exposé dispatch regression coverage.]]></description>
+      <pubDate>Tue, 08 Sep 2026 01:13:27 +0000</pubDate>
+      <enclosure url="https://github.com/apotenza92/dockmint/releases/download/v0.4.7/Dockmint-v0.4.7-macos-x64.zip"
+                 sparkle:edSignature="dJeCL7rfJD2TELLSbTXyUPssYDtI242Tdyejpx+7jgZWmVPYZ5q2l2ET2OZODAGEDM1BQ3DrQ1AmUvdTZibnDw=="
+                 length="3180531"
                  type="application/octet-stream" />
     </item>
   </channel>
