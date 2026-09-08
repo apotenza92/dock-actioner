@@ -975,7 +975,13 @@ final class DockExposeCoordinator: ObservableObject {
             }
 
             Logger.debug("APP_EXPOSE_TRACE: click=\(effectiveContext.clickSequence) phase=up bundle=\(effectiveContext.clickedBundle) clickCount=\(effectiveContext.clickCount) frontmostBefore=\(effectiveContext.frontmostBefore ?? "nil") windowsAtDown=\(effectiveContext.windowCountAtMouseDown.map(String.init) ?? "nil") consumePlanned=\(effectiveContext.consumeClick) fallbackLatched=\(effectiveContext.forceFirstClickActivateFallback)")
-            let consumeNow = executeClickAction(effectiveContext)
+            let mouseDownWasConsumed = shouldConsumeMouseDown(for: context)
+            let actionConsumed = executeClickAction(effectiveContext)
+            let consumeNow = DockDecisionEngine.shouldConsumeMouseUp(
+                actionConsumed: actionConsumed,
+                mouseDownWasConsumed: mouseDownWasConsumed,
+                dragged: false
+            )
             if consumeNow != context.consumeClick {
                 Logger.debug("WORKFLOW: Click consume mismatch click=\(context.clickSequence) planned=\(context.consumeClick) actual=\(consumeNow)")
             }
@@ -2243,16 +2249,17 @@ final class DockExposeCoordinator: ObservableObject {
             self.appExposeInvocationToken = nil
             WindowManager.invalidateWindowQueryCache(bundleIdentifier: bundleIdentifier,
                                                     includeRelatedProcessIDs: false)
-            Logger.debug("WORKFLOW: App Exposé invoke result target=\(bundleIdentifier) dispatched=\(result.dispatched) evidence=\(result.evidence) confirmed=\(result.confirmed) strategy=\(result.strategy?.rawValue ?? "none") frontmostAfter=\(result.frontmostAfter)")
+            Logger.debug("WORKFLOW: App Exposé invoke result target=\(bundleIdentifier) dispatched=\(result.dispatched) evidence=\(result.evidence) confirmed=\(result.confirmed) acknowledged=\(result.acknowledged) strategy=\(result.strategy?.rawValue ?? "none") frontmostAfter=\(result.frontmostAfter)")
 
-            if DockDecisionEngine.shouldCommitAppExposeTracking(invocationConfirmed: result.confirmed) {
+            if DockDecisionEngine.shouldCommitAppExposeTracking(invocationConfirmed: result.confirmed,
+                                                              invocationAcknowledged: result.acknowledged) {
                 self.lastTriggeredBundle = bundleIdentifier
                 self.currentExposeApp = bundleIdentifier
                 self.lastExposeDockClickBundle = bundleIdentifier
                 self.lastExposeInteractionAt = Date()
                 self.appsWithoutWindowsInExpose.remove(bundleIdentifier)
                 self.scheduleExposeTrackingExpiry(for: bundleIdentifier)
-                Logger.debug("WORKFLOW: App Exposé tracking commit confirmed for \(bundleIdentifier)")
+                Logger.debug("WORKFLOW: App Exposé tracking commit for \(bundleIdentifier) visualEvidence=\(result.evidence) acknowledged=\(result.acknowledged)")
                 return
             }
 

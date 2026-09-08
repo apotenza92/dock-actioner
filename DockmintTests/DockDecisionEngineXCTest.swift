@@ -19,6 +19,29 @@ final class DockDecisionEngineXCTest: XCTestCase {
         XCTAssertEqual(state.disposition(nowUptime: 2.3, scrollPhase: 4, momentumPhase: 0), .evaluate)
     }
 
+    func testMouseUpPreservesNativePressForEveryActionOutcome() {
+        for actionConsumed in [false, true] {
+            for downConsumed in [false, true] {
+                for dragged in [false, true] {
+                    XCTAssertEqual(DockDecisionEngine.shouldConsumeMouseUp(
+                        actionConsumed: actionConsumed,
+                        mouseDownWasConsumed: downConsumed,
+                        dragged: dragged),
+                        actionConsumed && downConsumed && !dragged)
+                }
+            }
+        }
+        // A ready multi-window count must not swallow the native release;
+        // a late or below-gate count must preserve the same complete click.
+        for actionConsumed in [true, false] {
+            let downConsumed = DockDecisionEngine.shouldConsumePendingMouseDown(
+                consumeClick: true, isDeferredAppExposeWindowCount: true,
+                shouldFinishModifierClickEarly: false)
+            XCTAssertFalse(DockDecisionEngine.shouldConsumeMouseUp(
+                actionConsumed: actionConsumed, mouseDownWasConsumed: downConsumed, dragged: false))
+        }
+    }
+
     func testConsumedMouseDownIsReplayedWhenMovementBecomesDrag() {
         XCTAssertTrue(
             DockDecisionEngine.shouldReplayConsumedMouseDownForDrag(

@@ -76,6 +76,7 @@ else
   echo "Running required pre-release validation..."
   PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/release/tests -v
   ./scripts/run_decision_engine_tests.sh
+  ./scripts/run_app_expose_invoker_tests.sh
   xcodebuild -project Dockmint.xcodeproj -scheme Dockmint -configuration Debug -destination 'platform=macOS' test
   xcodebuild -project Dockmint.xcodeproj -scheme Dockmint -configuration Debug build
   if [[ "${DOCKMINT_RUN_LOCAL_UI_CHECKS:-0}" == "1" ]]; then

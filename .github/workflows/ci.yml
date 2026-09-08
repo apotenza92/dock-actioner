@@ -67,6 +67,9 @@ jobs:
             ONLY_ACTIVE_ARCH=YES \
             CODE_SIGNING_ALLOWED=NO
 
+      - name: Test App Exposé dispatch without Dock interaction
+        run: ./scripts/run_app_expose_invoker_tests.sh
+
       - name: Build stable and beta contracts
         shell: bash
         run: |

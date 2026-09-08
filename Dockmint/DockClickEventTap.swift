@@ -297,7 +297,15 @@ final class DockClickEventTap {
             let downFlags = leftMouseDownFlags ?? currentFlags
             let dragged = leftMouseDragExceededThreshold
             Logger.debug("DockClickEventTap: Raw click up at \(location.x), \(location.y) (button: \(downButton), clickCount: \(clickCount), dragged: \(dragged))")
-            let shouldConsume = clickHandler?(location, downButton, clickCount, downFlags, .up) ?? false
+            let actionConsumed = clickHandler?(location, downButton, clickCount, downFlags, .up) ?? false
+            let shouldConsume = DockDecisionEngine.shouldConsumeMouseUp(
+                actionConsumed: actionConsumed,
+                mouseDownWasConsumed: leftMouseDownWasConsumed,
+                dragged: dragged
+            )
+            if actionConsumed && !shouldConsume {
+                Logger.debug("DockClickEventTap: Preserving physical release for native press")
+            }
             leftMouseDownPoint = nil
             leftMouseDownButton = nil
             leftMouseDownFlags = nil

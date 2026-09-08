@@ -6,6 +6,13 @@ All notable changes to this project are documented in this file (stable and beta
 
 - Ongoing development.
 
+## [v0.4.7]
+
+- Fixed Dock clicks remaining pressed for apps with multiple windows by preserving the physical mouse release whenever the press passes through.
+- Prefer the target Dock icon’s App Exposé accessibility action, with a guarded notification fallback.
+- Keep successful, acknowledged App Exposé actions tracked when macOS does not expose a matching visual window-list change.
+- Added click-pairing and App Exposé dispatch regression coverage.
+
 ## [v0.4.6]
 
 - Fixed updater verification after macOS resolves a temporary bundle path during relaunch, and retained diagnostics for future failures.

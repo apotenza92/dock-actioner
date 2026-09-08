@@ -183,8 +183,11 @@ enum DockDecisionEngine {
         return dispatched
     }
 
-    static func shouldCommitAppExposeTracking(invocationConfirmed: Bool) -> Bool {
-        invocationConfirmed
+    static func shouldCommitAppExposeTracking(invocationConfirmed: Bool,
+                                              invocationAcknowledged: Bool = false) -> Bool {
+        // AX success acknowledges the target action even when the compositor exposes
+        // no window-list delta. A posted notification or AX timeout is not acknowledgement.
+        invocationConfirmed || invocationAcknowledged
     }
 
     static func shouldResetStaleAppExposeTracking(trackedBundle: String?,
@@ -320,6 +323,13 @@ enum DockDecisionEngine {
              .singleAppMode:
             return true
         }
+    }
+
+    /// A native press must receive its physical release, regardless of the action result.
+    static func shouldConsumeMouseUp(actionConsumed: Bool,
+                                     mouseDownWasConsumed: Bool,
+                                     dragged: Bool) -> Bool {
+        actionConsumed && mouseDownWasConsumed && !dragged
     }
 
     static func shouldConsumePendingMouseDown(consumeClick: Bool,
